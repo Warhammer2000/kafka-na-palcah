@@ -1,41 +1,57 @@
 /* Глава 02 — Топик и партиции. Стенд про пропускную способность. */
 (function () {
   "use strict";
-  var el = KV.el, ui = KV.ui, util = KV.util;
+  var el = KV.el, ui = KV.ui, util = KV.util, L = KV.L;
 
   KV.scene({
     id: "partitions",
     num: 2,
-    group: "Устройство",
-    nav: "Топик и партиции",
-    title: "Топик — это несколько логов сразу",
-    lede: "<code>orders</code> — это <b>имя</b>, а не файл. Физически топик разрезан на несколько независимых логов — партиций. Вопрос главы: что ты покупаешь каждой следующей партицией.",
+    group: ["Устройство", "How it works"],
+    nav: ["Топик и партиции", "Topics and partitions"],
+    title: ["Топик — это несколько логов сразу", "A topic is several logs at once"],
+    lede: [
+      "<code>orders</code> — это <b>имя</b>, а не файл. Физически топик разрезан на несколько независимых логов — партиций. Вопрос главы: что ты покупаешь каждой следующей партицией.",
+      "<code>orders</code> is a <b>name</b>, not a file. Physically the topic is cut into several independent logs — partitions. The question of this chapter: what exactly do you buy with each extra partition."
+    ],
 
     build: function (root, api) {
 
       /* ---------------- подводка ---------------- */
 
-      root.appendChild(ui.prose(
+      root.appendChild(ui.prose(L(
         "<p>В коде живёт только [[топик]]: продюсер пишет «в <code>orders</code>», консьюмер читает «из <code>orders</code>». " +
         "Это логический уровень — именованный поток событий одного типа: <code>orders</code>, <code>payments</code>, <code>user-clicks</code>. " +
         "Слово «партиция» в прикладном коде почти не встречается.</p>" +
         "<p>А на дисках брокеров лежит другое. Топик <code>orders</code> — это набор [[партиция|партиций]], и каждая партиция " +
         "самостоятельный append-only лог со своей нумерацией с нуля. Скажем, партиция 0 — записи 0…4, партиция 1 — 0…2, партиция 2 — 0…6. " +
-        "<strong>Длины разные, и это нормально:</strong> партиции ничего друг о друге не знают, общего счётчика у топика нет.</p>"
-      ));
+        "<strong>Длины разные, и это нормально:</strong> партиции ничего друг о друге не знают, общего счётчика у топика нет.</p>",
 
-      root.appendChild(ui.note("key", "выучить дословно",
+        "<p>Your code only ever sees the [[topic]]: the producer writes “to <code>orders</code>”, the consumer reads “from <code>orders</code>”. " +
+        "That is the logical level — a named stream of events of one kind: <code>orders</code>, <code>payments</code>, <code>user-clicks</code>. " +
+        "The word “partition” hardly ever shows up in application code.</p>" +
+        "<p>On the brokers’ disks it looks different. The topic <code>orders</code> is a set of [[partition|partitions]], and every partition is " +
+        "an independent append-only log with its own numbering from zero. Say partition 0 holds records 0…4, partition 1 holds 0…2, partition 2 holds 0…6. " +
+        "<strong>The lengths differ, and that is normal:</strong> partitions know nothing about each other, and the topic has no shared counter.</p>"
+      )));
+
+      root.appendChild(ui.note("key", L("выучить дословно", "learn it word for word"), L(
         "<p><strong>«[[партиция|Партиция]] — единица параллелизма в Kafka».</strong></p>" +
         "<p>Один лог — один поток записи, и упирается он в одну машину: это потолок. Три партиции — три независимых потока, " +
         "а лежат они на разных [[брокер|брокерах]], то есть делится не только работа, но и железо. " +
-        "Число партиций — это и есть объявленная пропускная способность топика.</p>"
-      ));
+        "Число партиций — это и есть объявленная пропускная способность топика.</p>",
+
+        "<p><strong>“A [[partition]] is the unit of parallelism in Kafka.”</strong></p>" +
+        "<p>One log is one stream of writes, and it runs into a single machine: that is your ceiling. Three partitions are three independent streams, " +
+        "and they sit on different [[broker|brokers]], so it is not only the work that is split but the hardware too. " +
+        "The number of partitions is exactly the declared throughput of the topic.</p>"
+      )));
 
       /* ---------------- стенд ---------------- */
 
       var stage = ui.stage({
-        title: "Пропускная способность топика",
-        hint: "Двигай ползунок и смотри, за сколько тактов ляжет один и тот же поток"
+        title: L("Пропускная способность топика", "Topic throughput"),
+        hint: L("Двигай ползунок и смотри, за сколько тактов ляжет один и тот же поток",
+          "Drag the slider and watch how many ticks the very same stream takes")
       });
 
       var TOTAL = 24;        // событий в потоке
@@ -56,35 +72,36 @@
       var runId = 0;         // поколение прогона: гасит долетающие записи
       var timer = null;
 
-      function pPart(n) { return util.plural(n, "партиция", "партиции", "партиций"); }
-      function pPartLoc(n) { return util.plural(n, "партиции", "партициях", "партициях"); }
-      function pTick(n) { return util.plural(n, "такт", "такта", "тактов"); }
-      function pRec(n) { return util.plural(n, "запись", "записи", "записей"); }
-      function pEv(n) { return util.plural(n, "событие", "события", "событий"); }
-      function pLog(n) { return util.plural(n, "лог", "лога", "логов"); }
-      function pBrok(n) { return util.plural(n, "брокер", "брокера", "брокеров"); }
+      function pPart(n) { return util.plural(n, L("партиция", "partition"), L("партиции", "partitions"), L("партиций", "partitions")); }
+      function pPartLoc(n) { return util.plural(n, L("партиции", "partition"), L("партициях", "partitions"), L("партициях", "partitions")); }
+      function pTick(n) { return util.plural(n, L("такт", "tick"), L("такта", "ticks"), L("тактов", "ticks")); }
+      function pRec(n) { return util.plural(n, L("запись", "record"), L("записи", "records"), L("записей", "records")); }
+      function pEv(n) { return util.plural(n, L("событие", "event"), L("события", "events"), L("событий", "events")); }
+      function pLog(n) { return util.plural(n, L("лог", "log"), L("лога", "logs"), L("логов", "logs")); }
+      function pBrok(n) { return util.plural(n, L("брокер", "broker"), L("брокера", "brokers"), L("брокеров", "brokers")); }
       function brokerOf(i) { return (i % BROKERS) + 1; }
       function used() { return Math.min(N, BROKERS); }
       function needTicks(n) { return Math.ceil(TOTAL / n); }
       function paintCell(c) { if (c) c.style.background = "var(--write-soft)"; }
 
-      var RUN_LABEL = "Пустить поток из " + TOTAL + " " + pEv(TOTAL);
+      var RUN_LABEL = L("Пустить поток из ", "Send a stream of ") + TOTAL + " " + pEv(TOTAL);
 
       function timesWord(r) {
         if (Math.abs(r - Math.round(r)) < 0.05) {
           var n = Math.round(r);
-          return n + " " + util.plural(n, "раз", "раза", "раз");
+          return n + " " + util.plural(n, L("раз", "time"), L("раза", "times"), L("раз", "times"));
         }
-        return (Math.round(r * 10) / 10).toFixed(1).replace(".", ",") + " раза";
+        return (Math.round(r * 10) / 10).toFixed(1).replace(".", L(",", ".")) + L(" раза", " times");
       }
 
       /* --- поток от продюсера --- */
 
-      var producer = ui.node("producer", "продюсер", "пишет в orders");
+      var producer = ui.node("producer", L("продюсер", "producer"), L("пишет в orders", "writes to orders"));
 
       var streamTrack = el("div.kv-strip__track", { style: { "padding-right": "8px" } });
       var streamEmpty = el("div.kv-strip__empty", {
-        text: "поток разобран — все " + TOTAL + " " + pEv(TOTAL) + " лежат в партициях"
+        text: L("поток разобран — все ", "the stream is drained — all ") + TOTAL + " " + pEv(TOTAL) +
+          L(" лежат в партициях", " are sitting in the partitions")
       });
       var streamStrip = el("div.kv-strip", { style: { "min-height": "54px", "padding-bottom": "4px" } },
         streamTrack, streamEmpty);
@@ -100,7 +117,9 @@
         KV.clear(streamTrack);
         streamCells = {};
         pending.forEach(function (ev) {
-          var c = el("div.kv-cell", { title: "событие №" + ev + " — ещё не записано" }, String(ev));
+          var c = el("div.kv-cell", {
+            title: L("событие №", "event #") + ev + L(" — ещё не записано", " — not written yet")
+          }, String(ev));
           c.style.borderColor = "var(--write)";
           c.style.color = "var(--write)";
           var w = el("div.kv-cellwrap", null, c);
@@ -122,10 +141,11 @@
       function renderFormula() {
         var t = needTicks(N);
         formulaEl.innerHTML =
-          "за такт топик принимает по одной записи на партицию &nbsp;·&nbsp; " +
+          L("за такт топик принимает по одной записи на партицию &nbsp;·&nbsp; ",
+            "per tick the topic takes one record per partition &nbsp;·&nbsp; ") +
           "<b>" + TOTAL + "</b> " + pEv(TOTAL) + " ÷ <b>" + N + "</b> " + pPart(N) +
           " → <b>" + t + " " + pTick(t) + "</b>" +
-          (TOTAL % N ? " <span>(последний такт неполный)</span>" : "");
+          (TOTAL % N ? L(" <span>(последний такт неполный)</span>", " <span>(the last tick is not full)</span>") : "");
       }
 
       /* --- сам топик --- */
@@ -139,30 +159,36 @@
         strips = [];
         for (var i = 0; i < N; i++) {
           var s = ui.logStrip({
-            label: "партиция " + i,
-            sub: "брокер " + brokerOf(i),
-            empty: "пусто"
+            label: L("партиция ", "partition ") + i,
+            sub: L("брокер ", "broker ") + brokerOf(i),
+            empty: L("пусто", "empty")
           });
           strips.push(s);
           logWrap.appendChild(s.el);
         }
-        topicTitle.textContent = "топик orders · " + N + " " + pPart(N) +
-          " на " + used() + " " + util.plural(used(), "брокере", "брокерах", "брокерах");
+        topicTitle.textContent = L("топик orders · ", "topic orders · ") + N + " " + pPart(N) +
+          L(" на ", " on ") + used() + " " +
+          util.plural(used(), L("брокере", "broker"), L("брокерах", "brokers"), L("брокерах", "brokers"));
       }
 
       var readHint = el("div", {
         style: { "font-size": "12px", color: "var(--faint)", "margin-top": "10px", "max-width": "70ch" },
-        text: "В клетке — номер события в общем потоке, под клеткой — его offset внутри партиции. " +
-          "Номера потока идут подряд, а offset-ы у каждой партиции свои и начинаются с нуля."
+        text: L(
+          "В клетке — номер события в общем потоке, под клеткой — его offset внутри партиции. " +
+          "Номера потока идут подряд, а offset-ы у каждой партиции свои и начинаются с нуля.",
+
+          "Inside a cell is the event’s number in the whole stream; under the cell is its offset inside the partition. " +
+          "Stream numbers run one after another, while the offsets belong to each partition and start from zero."
+        )
       });
 
       /* --- показатели --- */
 
-      var stTicks = ui.stat("тактов затрачено", 0);
-      var stRate = ui.stat("за такт принимает", N, { unit: "зап." });
-      var stDone = ui.stat("записано", 0, { unit: "из " + TOTAL });
-      var stWait = ui.stat("ждут в потоке", TOTAL);
-      var stBrok = ui.stat("брокеров под нагрузкой", BROKERS, { unit: "из " + BROKERS });
+      var stTicks = ui.stat(L("тактов затрачено", "ticks spent"), 0);
+      var stRate = ui.stat(L("за такт принимает", "takes per tick"), N, { unit: L("зап.", "rec.") });
+      var stDone = ui.stat(L("записано", "written"), 0, { unit: L("из ", "of ") + TOTAL });
+      var stWait = ui.stat(L("ждут в потоке", "waiting in the stream"), TOTAL);
+      var stBrok = ui.stat(L("брокеров под нагрузкой", "brokers under load"), BROKERS, { unit: L("из ", "of ") + BROKERS });
       var statsRow = ui.stats(stTicks.el, stRate.el, stDone.el, stWait.el, stBrok.el);
 
       function renderStats() {
@@ -176,10 +202,10 @@
       /* --- загрузка партиций --- */
 
       var loadBody = el("div.kv-col", { style: { gap: "7px" } });
-      var loadPanel = ui.panel("загрузка партиций",
+      var loadPanel = ui.panel(L("загрузка партиций", "partition load"),
         el("div", {
           style: { "font-size": "12px", color: "var(--faint)", "margin-bottom": "9px" },
-          text: "какая доля потока досталась каждой"
+          text: L("какая доля потока досталась каждой", "what share of the stream each one got")
         }),
         loadBody);
 
@@ -202,7 +228,7 @@
           },
             el("span", {
               style: { "font-family": "var(--f-mono)", "font-size": "11px", color: "var(--ink-2)" },
-              text: "п" + i + " · брокер " + brokerOf(i)
+              text: L("п", "p") + i + L(" · брокер ", " · broker ") + brokerOf(i)
             }),
             bar.el, cnt);
           bars.push({ bar: bar, cnt: cnt });
@@ -223,14 +249,15 @@
       /* --- брокеры --- */
 
       var brokersBody = el("div.kv-col", { style: { gap: "7px" } });
-      var brokersPanel = ui.panel("кластер: " + BROKERS + " " + pBrok(BROKERS), brokersBody);
+      var brokersPanel = ui.panel(L("кластер: ", "cluster: ") + BROKERS + " " + pBrok(BROKERS), brokersBody);
 
       function buildBrokers() {
         KV.clear(brokersBody);
         for (var b = 1; b <= BROKERS; b++) {
           var mine = [];
-          for (var i = 0; i < N; i++) if (brokerOf(i) === b) mine.push("п" + i);
-          var node = ui.node(null, "брокер " + b, mine.length ? mine.join(", ") : "по этому топику простаивает");
+          for (var i = 0; i < N; i++) if (brokerOf(i) === b) mine.push(L("п", "p") + i);
+          var node = ui.node(null, L("брокер ", "broker ") + b,
+            mine.length ? mine.join(", ") : L("по этому топику простаивает", "idle as far as this topic goes"));
           if (!mine.length) node.classList.add("kv-node--dead");
           brokersBody.appendChild(node);
         }
@@ -244,7 +271,7 @@
         KV.clear(histRow);
         var keys = Object.keys(history).map(Number).sort(function (a, b) { return a - b; });
         if (!keys.length) return;
-        histRow.appendChild(el("span.kv-ctl__label", { text: "прогоны" }));
+        histRow.appendChild(el("span.kv-ctl__label", { text: L("прогоны", "runs") }));
         keys.forEach(function (k) {
           histRow.appendChild(ui.badge(
             k + " " + pPart(k) + " → " + history[k] + " " + pTick(history[k]),
@@ -263,7 +290,7 @@
           paintCell(s.push({
             label: String(ev),
             color: "var(--write)",
-            title: "событие №" + ev + " · партиция " + p + " · offset " + off
+            title: L("событие №", "event #") + ev + L(" · партиция ", " · partition ") + p + " · offset " + off
           }));
           s.highlight(off, "is-hot", 420);
         }
@@ -305,38 +332,48 @@
 
         syncStream();
         renderStats();
-        stage.say("Такт <b>" + ticks + "</b>: топик разом откусил от потока " + takeNow + " " + pRec(takeNow) +
+        stage.say(L("Такт <b>", "Tick <b>") + ticks +
+          L("</b>: топик разом откусил от потока ", "</b>: the topic bit ") + takeNow + " " + pRec(takeNow) +
           (takeNow === N
-            ? " — по одной на каждую партицию. "
-            : " — поток кончается, и работы хватило не всем партициям: остальные в этом такте простояли. ") +
-          "В потоке осталось " + pending.length + ".");
+            ? L(" — по одной на каждую партицию. ", " off the stream at once — one for every partition. ")
+            : L(" — поток кончается, и работы хватило не всем партициям: остальные в этом такте простояли. ",
+                " off the stream at once — the stream is running out and there was not enough work for every partition: the rest idled this tick. ")) +
+          L("В потоке осталось ", "Left in the stream: ") + pending.length + ".");
       }
 
       function conclude() {
         var lens = strips.map(function (s) { return s.records.length; });
         var even = lens.every(function (v) { return v === lens[0]; });
 
-        var html = "<b>Поток разложен за " + ticks + " " + pTick(ticks) + ".</b> " +
-          "За один такт топик принимает столько записей, сколько у него партиций — " + N + ". " +
-          "Отсюда вся арифметика: " + TOTAL + " ÷ " + N + " → " + ticks + ". ";
+        var html = L("<b>Поток разложен за ", "<b>The stream was laid out in ") + ticks + " " + pTick(ticks) + ".</b> " +
+          L("За один такт топик принимает столько записей, сколько у него партиций — ",
+            "In one tick the topic takes as many records as it has partitions — ") + N + ". " +
+          L("Отсюда вся арифметика: ", "That is where all the arithmetic comes from: ") +
+          TOTAL + " ÷ " + N + " → " + ticks + ". ";
 
         if (N === 1) {
-          html += "Одна партиция — один поток записи: события выстроились в затылок друг другу, и никакое железо этого не ускорит. ";
+          html += L("Одна партиция — один поток записи: события выстроились в затылок друг другу, и никакое железо этого не ускорит. ",
+            "One partition is one stream of writes: the events lined up behind one another, and no hardware will make that faster. ");
         } else {
-          html += "Партиции работали параллельно и независимо: каждая вела свою нумерацию с нуля. ";
+          html += L("Партиции работали параллельно и независимо: каждая вела свою нумерацию с нуля. ",
+            "The partitions worked in parallel and independently: each kept its own numbering from zero. ");
         }
 
         html += N === 1
-          ? "В единственном логе " + lens[0] + " " + pRec(lens[0]) + " — весь поток целиком. "
-          : "Длины получились " + lens.join(", ") +
-            (even ? " — поток разделился без остатка. "
-                  : " — разные, и это нормально: общего счётчика у топика нет. ");
+          ? L("В единственном логе ", "The one and only log holds ") + lens[0] + " " + pRec(lens[0]) +
+            L(" — весь поток целиком. ", " — the whole stream. ")
+          : L("Длины получились ", "The lengths came out as ") + lens.join(", ") +
+            (even ? L(" — поток разделился без остатка. ", " — the stream divided with nothing left over. ")
+                  : L(" — разные, и это нормально: общего счётчика у топика нет. ",
+                      " — they differ, and that is normal: the topic has no shared counter. "));
 
         html += used() < BROKERS
-          ? "Под нагрузкой " + used() + " " + pBrok(used()) +
-            " из " + BROKERS + " — остальное железо по этому топику простаивает."
-          : "Все " + BROKERS + " " + pBrok(BROKERS) +
-            " под нагрузкой — запись делится не только между потоками, но и между машинами.";
+          ? L("Под нагрузкой ", "Under load: ") + used() + " " + pBrok(used()) +
+            L(" из ", " of ") + BROKERS +
+            L(" — остальное железо по этому топику простаивает.", " — the rest of the hardware idles as far as this topic goes.")
+          : L("Все ", "All ") + BROKERS + " " + pBrok(BROKERS) +
+            L(" под нагрузкой — запись делится не только между потоками, но и между машинами.",
+              " are under load — writing is split not only between streams but between machines.");
 
         var cmp = null;
         Object.keys(history).map(Number).forEach(function (k) {
@@ -345,9 +382,11 @@
         });
         if (cmp !== null) {
           var t2 = history[cmp];
-          html += " <b>Для сравнения:</b> при " + cmp + " " + pPartLoc(cmp) + " тот же поток уложился за " +
-            t2 + " " + pTick(t2) + " — в " +
-            (t2 > ticks ? timesWord(t2 / ticks) + " дольше." : timesWord(ticks / t2) + " быстрее.");
+          html += L(" <b>Для сравнения:</b> при ", " <b>For comparison:</b> with ") + cmp + " " + pPartLoc(cmp) +
+            L(" тот же поток уложился за ", " the same stream took ") +
+            t2 + " " + pTick(t2) + L(" — в ", " — ") +
+            (t2 > ticks ? timesWord(t2 / ticks) + L(" дольше.", " longer.")
+                        : timesWord(ticks / t2) + L(" быстрее.", " faster."));
         }
 
         stage.say(html);
@@ -376,10 +415,17 @@
            долетают. Тогда это не остановка, а финал — вывод и журнал прогонов
            пишет maybeConclude, иначе прогон исчез бы бесследно. */
         if (!pending.length) { maybeConclude(); return; }
-        stage.say("Остановлено на такте <b>" + ticks + "</b>: из " + TOTAL + " " + pEv(TOTAL) +
+        stage.say(L(
+          "Остановлено на такте <b>" + ticks + "</b>: из " + TOTAL + " " + pEv(TOTAL) +
           " топик успел забрать " + (TOTAL - pending.length) + ", в потоке ещё " +
           (pending.length === 1 ? "ждёт" : "ждут") + " " + pending.length + ". " +
-          "Жми «пустить поток» — прогон начнётся с чистого топика.");
+          "Жми «пустить поток» — прогон начнётся с чистого топика.",
+
+          "Stopped at tick <b>" + ticks + "</b>: out of " + TOTAL + " " + pEv(TOTAL) +
+          " the topic managed to take " + (TOTAL - pending.length) + ", and " + pending.length +
+          (pending.length === 1 ? " is" : " are") + " still waiting in the stream. " +
+          "Press “send a stream” — the run will start from a clean topic."
+        ));
       }
 
       function idle() {
@@ -414,7 +460,7 @@
       function startRun() {
         arm(null);
         running = true;
-        runBtn.textContent = "Стоп";
+        runBtn.textContent = L("Стоп", "Stop");
         nRange.input.disabled = true;
         renderStats();
         step();
@@ -423,12 +469,21 @@
 
       function setN(v) {
         N = v;
-        arm("Партиций теперь <b>" + N + "</b>. Пропускная способность топика — " + N + " " + pRec(N) +
+        arm(L(
+          "Партиций теперь <b>" + N + "</b>. Пропускная способность топика — " + N + " " + pRec(N) +
           " за такт, значит " + TOTAL + " " + pEv(TOTAL) + " лягут за <b>" + needTicks(N) + " " + pTick(needTicks(N)) + "</b>. " +
           (N === 1
             ? "Одна партиция — один поток: всё выстроится в очередь."
             : "Партиций " + N + ", брокеров под нагрузкой " + used() + ".") +
-          " Жми «пустить поток» и проверь.");
+          " Жми «пустить поток» и проверь.",
+
+          "Now the topic has <b>" + N + "</b> " + pPart(N) + ". Its throughput is " + N + " " + pRec(N) +
+          " per tick, so " + TOTAL + " " + pEv(TOTAL) + " will land in <b>" + needTicks(N) + " " + pTick(needTicks(N)) + "</b>. " +
+          (N === 1
+            ? "One partition is one stream: everything lines up in a queue."
+            : "Partitions: " + N + ", brokers under load: " + used() + ".") +
+          " Press “send a stream” and check."
+        ));
       }
 
       /* --- стартовое состояние: прогон уже сделан --- */
@@ -444,7 +499,7 @@
             recs[p].push({
               label: String(ev),
               color: "var(--write)",
-              title: "событие №" + ev + " · партиция " + p + " · offset " + recs[p].length
+              title: L("событие №", "event #") + ev + L(" · партиция ", " · partition ") + p + " · offset " + recs[p].length
             });
           }
         }
@@ -460,11 +515,19 @@
         renderBars();
         renderStats();
         renderHistory();
-        stage.say("Так выглядит топик <code>orders</code> после одного прогона: " + N + " независимых " + pLog(N) +
+        stage.say(L(
+          "Так выглядит топик <code>orders</code> после одного прогона: " + N + " независимых " + pLog(N) +
           " на " + used() + " " + util.plural(used(), "брокере", "брокерах", "брокерах") +
           ", " + TOTAL + " " + pEv(TOTAL) + " уже разъехались по ним за <b>" + t + " " + pTick(t) + "</b>. " +
           "Длины партиций разные — партиции друг о друге не знают. Нажми «пустить поток», чтобы увидеть это по тактам, " +
-          "а потом поставь ползунок на 1 и сравни.");
+          "а потом поставь ползунок на 1 и сравни.",
+
+          "This is what the topic <code>orders</code> looks like after one run: " + N + " independent " + pLog(N) +
+          " on " + used() + " " + util.plural(used(), "broker", "brokers", "brokers") +
+          ", and " + TOTAL + " " + pEv(TOTAL) + " have already spread across them in <b>" + t + " " + pTick(t) + "</b>. " +
+          "The partitions have different lengths — they know nothing about each other. Press “send a stream” to watch it tick by tick, " +
+          "then move the slider to 1 and compare."
+        ));
       }
 
       /* --- контролы --- */
@@ -474,27 +537,32 @@
       }, { variant: "primary" });
 
       var nRange = ui.range({
-        label: "партиций", min: 1, max: 6, value: N,
+        label: L("партиций", "partitions"), min: 1, max: 6, value: N,
         onInput: function (v) { setN(v); }
       });
 
-      var resetBtn = ui.btn("Сброс", function () {
-        arm("Сброшено: топик пуст, " + TOTAL + " " + pEv(TOTAL) + " снова ждут в потоке. Партиций " + N +
-          " — по расчёту понадобится " + needTicks(N) + " " + pTick(needTicks(N)) + ".");
+      var resetBtn = ui.btn(L("Сброс", "Reset"), function () {
+        arm(L(
+          "Сброшено: топик пуст, " + TOTAL + " " + pEv(TOTAL) + " снова ждут в потоке. Партиций " + N +
+          " — по расчёту понадобится " + needTicks(N) + " " + pTick(needTicks(N)) + ".",
+
+          "Reset: the topic is empty and " + TOTAL + " " + pEv(TOTAL) + " are waiting in the stream again. Partitions: " + N +
+          " — by the arithmetic it will take " + needTicks(N) + " " + pTick(needTicks(N)) + "."
+        ));
       }, { variant: "ghost", sm: true });
 
-      var clearHist = ui.btn("Очистить журнал", function () {
+      var clearHist = ui.btn(L("Очистить журнал", "Clear the run log"), function () {
         history = {};
         renderHistory();
-        stage.say("Журнал прогонов пуст.");
+        stage.say(L("Журнал прогонов пуст.", "The run log is empty."));
       }, { variant: "ghost", sm: true });
 
       /* --- сборка стенда --- */
 
-      stage.body.appendChild(ui.panel("поток от продюсера · " + TOTAL + " " + pEv(TOTAL),
+      stage.body.appendChild(ui.panel(L("поток от продюсера · ", "stream from the producer · ") + TOTAL + " " + pEv(TOTAL),
         el("div.kv-row", { style: { "margin-bottom": "8px" } },
           producer,
-          ui.badge("события идут по порядку: 0 → " + (TOTAL - 1), "write")),
+          ui.badge(L("события идут по порядку: 0 → ", "the events come in order: 0 → ") + (TOTAL - 1), "write")),
         streamStrip));
 
       stage.body.appendChild(formulaEl);
@@ -512,7 +580,7 @@
 
       /* ---------------- разбор ---------------- */
 
-      root.appendChild(ui.prose(
+      root.appendChild(ui.prose(L(
         "<h3>Что ты сейчас увидел</h3>" +
         "<p>Модель нарочно примитивная — партиция принимает за такт одну запись, — но пропорция настоящая: " +
         "<code>тактов = ⌈24 / партиций⌉</code>. Одна партиция тянет поток 24 такта, четыре — шесть, шесть — четыре. " +
@@ -534,10 +602,33 @@
         "<h4>Чтение считается так же</h4>" +
         "<p>Только с оговоркой: в [[consumer group|группе консьюмеров]] одну партицию читает максимум один консьюмер. " +
         "Значит число партиций — ещё и потолок для читателей: на топике из трёх партиций четвёртый консьюмер группы будет стоять без работы. " +
-        "Это тема отдельной главы, но решение принимается здесь — в момент, когда выбирается число партиций.</p>"
-      ));
+        "Это тема отдельной главы, но решение принимается здесь — в момент, когда выбирается число партиций.</p>",
 
-      root.appendChild(ui.note("warn", "цена вопроса",
+        "<h3>What you have just seen</h3>" +
+        "<p>The model is primitive on purpose — a partition takes one record per tick — but the proportion is real: " +
+        "<code>ticks = ⌈24 / partitions⌉</code>. One partition drags the stream for 24 ticks, four do it in six, six in four. " +
+        "Adding partitions does <em>not speed up</em> a single write: it adds independent lanes along which records travel at the same time.</p>" +
+        "<p>The second simplification is the layout itself. The demo drops one record into each partition around the ring, because that is what makes " +
+        "the arithmetic visible. In real life the partition for a record <b>without a key</b> is chosen not by the broker but by the [[producer]] itself, and since Kafka 2.4 its " +
+        "partitioner is “sticky”: it fills <em>one</em> partition until the batch closes (<code>batch.size</code> / " +
+        "<code>linger.ms</code>), and only then moves on to the next. Since Kafka 3.3 this is built into the producer, and the older " +
+        "<code>DefaultPartitioner</code> and <code>UniformStickyPartitioner</code> are deprecated. So the load " +
+        "evens out <b>across batches</b>, not across messages; it makes no difference to the ceiling of the topic, and without a key there is still " +
+        "no order between partitions anyway. More on that in the chapter on the [[key]].</p>" +
+        "<h4>Two kinds of parallelism</h4>" +
+        "<p>The first is streams: partitions are written independently, each with its own numbering. The second is hardware: partitions are spread across " +
+        "[[broker|brokers]]. Six partitions on three brokers means two per server — three disks and three network cards instead of one. " +
+        "Just do not expect a new machine in the cluster to pick up the load by itself: partitions <em>do not move</em> onto it automatically — " +
+        "the layout is changed by a separate operation, by reassigning replicas (<code>kafka-reassign-partitions</code>). " +
+        "But after that the ceiling of the topic really does grow together with the cluster. " +
+        "With a single partition two brokers out of three simply idle for this topic — you saw it on the “brokers under load” tile.</p>" +
+        "<h4>Reading counts the same way</h4>" +
+        "<p>With one caveat: inside a [[consumer group]] a partition is read by at most one consumer. " +
+        "So the number of partitions is also the ceiling for readers: on a topic with three partitions the fourth consumer of the group will stand around with nothing to do. " +
+        "That is a chapter of its own, but the decision is made right here — at the moment you pick the number of partitions.</p>"
+      )));
+
+      root.appendChild(ui.note("warn", L("цена вопроса", "what it costs"), L(
         "<p>Партиции не бесплатны, и это не абстрактное «накладные расходы»:</p>" +
         "<ul>" +
         "<li>Партиций легко <b>добавить</b> и <b>нельзя убрать</b>. Единственный способ уменьшить — новый топик и перелив данных.</li>" +
@@ -547,16 +638,36 @@
         "<li>Каждая партиция — это открытые файлы, память под буферы, свои реплики и время на выборы лидеров, когда брокер упал. " +
         "Счёт идёт на тысячи партиций на брокер: потолок упирается в железо и в скорость восстановления, а не в строчку конфига.</li>" +
         "<li>Порядок гарантирован <b>только внутри партиции</b>. Разрезав топик на шесть частей, ты разрезал и порядок.</li>" +
-        "</ul>"
-      ));
+        "</ul>",
 
-      root.appendChild(ui.takeaway([
-        "[[топик|Топик]] — логическое имя потока, [[партиция|партиции]] — физические логи под ним. Один топик = несколько независимых append-only логов.",
-        "<b>«Партиция — единица параллелизма в Kafka»</b>: N партиций = N параллельных потоков записи и не больше N читателей в одной [[consumer group|группе]].",
-        "Партиции разложены по [[брокер|брокерам]] — нагрузка делится между машинами, а не только между потоками.",
-        "Длины партиций разные, [[offset|offset]]-ы у каждой свои и начинаются с нуля. Общего счётчика у топика нет — как и общего порядка.",
-        "Партиций легко добавить и нельзя убрать, а добавление перетасовывает раскладку по [[ключ|ключам]]. Число партиций — решение на годы вперёд."
-      ]));
+        "<p>Partitions are not free, and this is not some abstract “overhead”:</p>" +
+        "<ul>" +
+        "<li>Partitions are easy to <b>add</b> and <b>impossible to remove</b>. The only way to have fewer is a new topic and copying the data over.</li>" +
+        "<li>Adding them rebuilds the layout by [[key|keys]]: <code>hash(key) % N</code> with a new <code>N</code> lands on a different partition. " +
+        "What is already written does not move anywhere — the old events of a key stay where they were, the new ones go somewhere else, " +
+        "and the order for that key is broken. That is what the chapter on the key is about.</li>" +
+        "<li>Every partition means open files, memory for buffers, replicas of its own and time spent electing leaders when a broker goes down. " +
+        "The count runs into thousands of partitions per broker: the ceiling is set by the hardware and by recovery speed, not by a line in a config.</li>" +
+        "<li>Order is guaranteed <b>only inside a partition</b>. By cutting the topic into six pieces you cut the order into six pieces too.</li>" +
+        "</ul>"
+      )));
+
+      root.appendChild(ui.takeaway(L(
+        [
+          "[[топик|Топик]] — логическое имя потока, [[партиция|партиции]] — физические логи под ним. Один топик = несколько независимых append-only логов.",
+          "<b>«Партиция — единица параллелизма в Kafka»</b>: N партиций = N параллельных потоков записи и не больше N читателей в одной [[consumer group|группе]].",
+          "Партиции разложены по [[брокер|брокерам]] — нагрузка делится между машинами, а не только между потоками.",
+          "Длины партиций разные, [[offset|offset]]-ы у каждой свои и начинаются с нуля. Общего счётчика у топика нет — как и общего порядка.",
+          "Партиций легко добавить и нельзя убрать, а добавление перетасовывает раскладку по [[ключ|ключам]]. Число партиций — решение на годы вперёд."
+        ],
+        [
+          "A [[topic]] is the logical name of a stream, [[partition|partitions]] are the physical logs underneath it. One topic = several independent append-only logs.",
+          "<b>“A partition is the unit of parallelism in Kafka”</b>: N partitions = N parallel streams of writes, and no more than N readers in one [[consumer group|group]].",
+          "Partitions are spread across [[broker|brokers]] — the load is split between machines, not only between streams.",
+          "Partitions have different lengths, and each has its own [[offset]]s starting from zero. The topic has no shared counter — and no shared order either.",
+          "Partitions are easy to add and impossible to remove, and adding them reshuffles the layout by [[key|keys]]. The number of partitions is a decision for years ahead."
+        ]
+      )));
     }
   });
 })();

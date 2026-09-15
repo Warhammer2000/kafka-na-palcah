@@ -1,40 +1,55 @@
 /* Глава 14 — Песочница: собери свой топик. Всё изученное в одном живом стенде. */
 (function () {
   "use strict";
-  var el = KV.el, ui = KV.ui, util = KV.util;
+  var el = KV.el, ui = KV.ui, util = KV.util, L = KV.L;
 
   KV.scene({
     id: "sandbox",
     num: 14,
-    group: "Прод",
-    nav: "Песочница",
-    title: "Песочница: собери свой топик",
-    lede: "Партиции, ключи, группа, <code>lag</code> и <code>retention</code> — здесь всё крутится одновременно и по-настоящему. Вопрос один: <b>какой ручкой ты сломаешь этот топик первым</b>?",
+    group: ["Прод", "Production"],
+    nav: ["Песочница", "Sandbox"],
+    title: ["Песочница: собери свой топик", "Sandbox: build your own topic"],
+    lede: [
+      "Партиции, ключи, группа, <code>lag</code> и <code>retention</code> — здесь всё крутится одновременно и по-настоящему. Вопрос один: <b>какой ручкой ты сломаешь этот топик первым</b>?",
+      "Partitions, keys, a consumer group, <code>lag</code> and <code>retention</code> — here it all runs at once, and for real. Only one question: <b>which knob will you break this topic with first</b>?"
+    ],
 
     build: function (root, api) {
 
       /* ---------------- подводка ---------------- */
 
-      root.appendChild(ui.prose(
+      root.appendChild(ui.prose(L(
         "<p>Стенд уже работает: три [[партиция|партиции]], продюсер пишет 4 сообщения в секунду, два консьюмера их разбирают. " +
         "Пока «пишут ≤ читают», система выглядит скучно — так и должен выглядеть здоровый прод.</p>" +
         "<p>Дальше твоя работа: крути ручки по одной и смотри не на красоту лент, а на три числа — суммарный [[lag]], " +
         "число простаивающих консьюмеров и счётчик съеденного по [[retention]]. Переключатель <b>ключ</b> — это стратегия продюсера: " +
-        "пять разных <code>uid-…</code>, горячий ключ (80 % событий с одним <code>uid-999</code>) или вовсе без ключа ([[round-robin]]).</p>"
-      ));
+        "пять разных <code>uid-…</code>, горячий ключ (80 % событий с одним <code>uid-999</code>) или вовсе без ключа ([[round-robin]]).</p>",
 
-      var tasks = [
+        "<p>The demo is already running: three [[partition|partitions]], the producer writes 4 messages per second, two consumers work through them. " +
+        "While “writes ≤ reads”, the system looks boring — and that is exactly how healthy production should look.</p>" +
+        "<p>From here it is your turn: turn one knob at a time and watch not the pretty strips but three numbers — total [[lag]], " +
+        "the number of idle consumers, and the counter of what [[retention]] has eaten. The <b>key</b> switch is the producer’s strategy: " +
+        "five different <code>uid-…</code>, a hot key (80 % of the events carrying one <code>uid-999</code>) or no key at all ([[round-robin]]).</p>"
+      )));
+
+      var tasks = L([
         "Оставь <b>одного</b> консьюмера на 6 партиций — смотри, как [[lag]] растёт ровно на разницу скоростей.",
         "Поставь консьюмеров <b>больше, чем партиций</b>, — найди тех, кому не досталось ни одной. Они не помогают, они просто стоят.",
         "Включи <b>горячий ключ</b> — найди по столбцу <code>lag</code> перекошенную партицию, пока соседние спят.",
         "<b>Убей консьюмера</b> в разгар потока — засеки простой на [[ребаланс]]е и на сколько за него вырос lag.",
         "Урежь <b>retention</b> до 5 секунд при медленной группе — лог начнёт съедать сообщения раньше, чем их прочитают."
-      ];
+      ], [
+        "Leave <b>one</b> consumer on 6 partitions — watch [[lag]] grow by exactly the difference in speeds.",
+        "Put <b>more consumers than partitions</b> — find the ones that got none at all. They do not help, they just stand there.",
+        "Turn on the <b>hot key</b> — use the <code>lag</code> column to spot the skewed partition while its neighbours sleep.",
+        "<b>Kill a consumer</b> mid-flow — time the pause the [[rebalance]] costs and how much lag grew during it.",
+        "Cut <b>retention</b> to 5 seconds with a slow group — the log will start eating messages before anyone reads them."
+      ]);
       var taskList = el("ol", { style: { margin: "0", "padding-left": "20px", "font-size": "15px", "line-height": "1.55" } });
       tasks.forEach(function (t, i) {
         taskList.appendChild(el("li", { html: KV.terms(t), style: { "margin-top": i ? "7px" : "0" } }));
       });
-      root.appendChild(ui.panel("Попробуй сам", taskList));
+      root.appendChild(ui.panel(L("Попробуй сам", "Try it yourself"), taskList));
 
       /* ================= состояние модели ================= */
 
@@ -73,16 +88,17 @@
       function consColor(c) { return util.paletteColor(c); }
 
       function strategyName() {
-        return cfg.strategy === "hot" ? "горячий ключ (80 % один)"
-          : cfg.strategy === "none" ? "без ключа, round-robin"
-            : "userId, 5 разных";
+        return cfg.strategy === "hot" ? L("горячий ключ (80 % один)", "hot key (80 % on one)")
+          : cfg.strategy === "none" ? L("без ключа, round-robin", "no key, round-robin")
+            : L("userId, 5 разных", "userId, 5 different keys");
       }
 
       /* ================= стенд ================= */
 
       var stage = ui.stage({
-        title: "Топик orders · consumer group orders-worker",
-        hint: "цвет клетки — ключ · цвет флажка и подписи — консьюмер"
+        title: L("Топик orders · consumer group orders-worker", "Topic orders · consumer group orders-worker"),
+        hint: L("цвет клетки — ключ · цвет флажка и подписи — консьюмер",
+          "cell colour is the key · flag and label colour is the consumer")
       });
 
       /* --- журнал --- */
@@ -94,7 +110,7 @@
 
       function j(cls, head, text) {
         var t = (st.ms / 1000).toFixed(1);
-        jLines.push('<span class="t-dim">' + t + " с</span>  " +
+        jLines.push('<span class="t-dim">' + t + L(" с", " s") + "</span>  " +
           (cls ? '<span class="' + cls + '">' + head + "</span>" : head) +
           (text ? "  " + text : ""));
         if (jLines.length > 60) jLines = jLines.slice(-60);
@@ -104,18 +120,18 @@
 
       /* --- плитки --- */
 
-      var stTotal = ui.stat("записано всего", 0, { tone: "write" });
-      var stLag = ui.stat("суммарный lag", 0);
-      var stCons = ui.stat("работает / простаивает", "0 / 0");
-      var stReb = ui.stat("ребалансов", 0);
-      var stLost = ui.stat("съедено непрочитанным", 0);
+      var stTotal = ui.stat(L("записано всего", "written in total"), 0, { tone: "write" });
+      var stLag = ui.stat(L("суммарный lag", "total lag"), 0);
+      var stCons = ui.stat(L("работает / простаивает", "working / idle"), "0 / 0");
+      var stReb = ui.stat(L("ребалансов", "rebalances"), 0);
+      var stLost = ui.stat(L("съедено непрочитанным", "eaten unread"), 0);
       var statsRow = ui.stats(stTotal.el, stLag.el, stCons.el, stReb.el, stLost.el);
 
       /* --- узлы --- */
 
-      var producer = ui.node("producer", "продюсер", "4 сообщ/с");
+      var producer = ui.node("producer", L("продюсер", "producer"), L("4 сообщ/с", "4 msg/s"));
       var prodMeta = producer.querySelector(".kv-node__meta");
-      var topicBadge = ui.badge("топик orders · 3 партиции", "write");
+      var topicBadge = ui.badge(L("топик orders · 3 партиции", "topic orders · 3 partitions"), "write");
       var topRow = el("div.kv-row", { style: { "margin": "14px 0 10px" } },
         producer,
         el("span", { style: { "font-family": "var(--f-mono)", "font-size": "11px", color: "var(--faint)" }, text: "→" }),
@@ -145,16 +161,17 @@
             "p" + i,
             '<span style="font-family:var(--f-mono)">' + leo + "</span>" +
             ' <span style="color:var(--faint);font-size:12px">' +
-            (p.s.records.length ? "хранится с " + p.s.base : "лог пуст") + "</span>",
+            (p.s.records.length ? L("хранится с ", "kept from ") + p.s.base : L("лог пуст", "the log is empty")) + "</span>",
             '<span style="font-family:var(--f-mono)">' + p.committed + "</span>",
             lagCell,
             o >= 0
               ? '<span style="color:' + consColor(o) + ';font-weight:600">C' + (o + 1) + "</span>"
-              : '<span style="color:var(--faint)">никто</span>'
+              : '<span style="color:var(--faint)">' + L("никто", "nobody") + "</span>"
           ];
         });
         KV.clear(tableBox);
-        tableBox.appendChild(ui.table(["партиция", "LEO", "committed", "lag", "читает"], rows));
+        tableBox.appendChild(ui.table(L(["партиция", "LEO", "committed", "lag", "читает"],
+          ["partition", "LEO", "committed", "lag", "read by"]), rows));
       }
 
       /* ================= механика ================= */
@@ -163,7 +180,7 @@
         KV.clear(logBox);
         plog = []; pend = [];
         for (var i = 0; i < cfg.parts; i++) {
-          var s = ui.logStrip({ label: "партиция " + i, sub: "—", empty: "пусто" });
+          var s = ui.logStrip({ label: L("партиция ", "partition ") + i, sub: "—", empty: L("пусто", "empty") });
           logBox.appendChild(s.el);
           plog.push({ s: s, committed: 0, subEl: s.el.querySelector(".kv-part__label span") });
           pend.push({ time: 0, cap: 0, lost: 0 });
@@ -193,8 +210,10 @@
            и следом ребаланс) — один и тот же простой в журнал не дублируем */
         var sig = idle.join(" ") + "/" + cfg.cons + "/" + cfg.parts;
         if (idle.length && sig !== lastIdle) {
-          j("t-dim", "простой", idle.join(" ") + " без партиций: консьюмеров " + cfg.cons +
-            ", партиций " + cfg.parts + " — партицию в группе читает максимум один");
+          j("t-dim", L("простой", "idle"), idle.join(" ") +
+            L(" без партиций: консьюмеров ", " got no partitions: consumers ") + cfg.cons +
+            L(", партиций ", ", partitions ") + cfg.parts +
+            L(" — партицию в группе читает максимум один", " — a partition is read by at most one member of the group"));
         }
         lastIdle = sig;
       }
@@ -203,7 +222,7 @@
         plog.forEach(function (p, i) {
           if (!p.subEl) return;
           var o = owner[i];
-          p.subEl.textContent = o >= 0 ? "читает C" + (o + 1) : "читателя нет";
+          p.subEl.textContent = o >= 0 ? L("читает C", "read by C") + (o + 1) : L("читателя нет", "no reader");
           p.subEl.style.color = o >= 0 ? consColor(o) : "var(--faint)";
         });
       }
@@ -221,11 +240,12 @@
 
       function renderConsumers() {
         KV.clear(consRow);
-        consRow.appendChild(el("span.kv-ctl__label", { text: "группа orders-worker" }));
+        consRow.appendChild(el("span.kv-ctl__label", { text: L("группа orders-worker", "group orders-worker") }));
         if (!cfg.cons) {
           consRow.appendChild(el("span", {
             style: { "font-size": "13px", color: "var(--faint)" },
-            text: "в группе никого — топик пишется, но не читается"
+            text: L("в группе никого — топик пишется, но не читается",
+              "nobody in the group — the topic is written to, but nobody reads it")
           }));
           return;
         }
@@ -235,7 +255,7 @@
         load.forEach(function (list, ci) {
           var idle = !list.length;
           var color = idle ? "var(--warn)" : consColor(ci);
-          var n = ui.node("consumer", "C" + (ci + 1), idle ? "простаивает" : list.join(" "));
+          var n = ui.node("consumer", "C" + (ci + 1), idle ? L("простаивает", "idle") : list.join(" "));
           n.style.borderLeftColor = color;
           var dot = n.querySelector(".kv-node__dot");
           if (dot) dot.style.background = color;
@@ -249,9 +269,10 @@
        *  останется пустой навсегда, и это не перекос, а арифметика. */
       function noteKeyShortage() {
         if (cfg.strategy !== "users" || cfg.parts <= USERS.length) return;
-        j("t-dim", "ключей меньше, чем партиций",
-          "разных ключей " + USERS.length + ", партиций " + cfg.parts +
-          " — минимум одна лента останется пустой: параллелизм упирается не в партиции, а в число разных ключей");
+        j("t-dim", L("ключей меньше, чем партиций", "fewer keys than partitions"),
+          L("разных ключей ", "different keys ") + USERS.length + L(", партиций ", ", partitions ") + cfg.parts +
+          L(" — минимум одна лента останется пустой: параллелизм упирается не в партиции, а в число разных ключей",
+            " — at least one strip will stay empty for good: parallelism is capped not by partitions but by the number of different keys"));
       }
 
       function nextKey() {
@@ -339,18 +360,24 @@
         pend.forEach(function (q, i) {
           if (q.time) {
             j("t-dim", "retention", "p" + i + ": " +
-              util.plural(q.time, "удалена", "удалено", "удалено") + " " + q.time + " " +
-              util.plural(q.time, "запись", "записи", "записей") + " старше " + cfg.keep + " с");
+              util.plural(q.time, L("удалена", "deleted"), L("удалено", "deleted"), L("удалено", "deleted")) + " " + q.time + " " +
+              util.plural(q.time, L("запись", "record"), L("записи", "records"), L("записей", "records")) +
+              L(" старше ", " older than ") + cfg.keep + L(" с", " s"));
           }
           if (q.cap) {
-            j("t-dim", "лента полна", "p" + i + ": " +
-              util.plural(q.cap, "убрана", "убрано", "убрано") + " " + q.cap + " " +
-              util.plural(q.cap, "клетка", "клетки", "клеток") + " из начала — в ленте максимум " + MAX_CELLS);
+            j("t-dim", L("лента полна", "the strip is full"), "p" + i + ": " +
+              util.plural(q.cap, L("убрана", "dropped"), L("убрано", "dropped"), L("убрано", "dropped")) + " " + q.cap + " " +
+              util.plural(q.cap, L("клетка", "cell"), L("клетки", "cells"), L("клеток", "cells")) +
+              L(" из начала — в ленте максимум ", " from the front — the strip holds at most ") + MAX_CELLS);
           }
           if (q.lost) {
-            j("t-bad", "ПОТЕРЯ", "p" + i + ": " + q.lost + " " +
-              util.plural(q.lost, "запись съедена", "записи съедены", "записей съедено") +
-              " retention ДО того, как группа " + util.plural(q.lost, "её", "их", "их") + " прочитала");
+            j("t-bad", L("ПОТЕРЯ", "DATA LOSS"), "p" + i + ": " + q.lost + " " +
+              util.plural(q.lost,
+                L("запись съедена", "record was eaten by"),
+                L("записи съедены", "records were eaten by"),
+                L("записей съедено", "records were eaten by")) +
+              L(" retention ДО того, как группа ", " retention BEFORE the group read ") +
+              util.plural(q.lost, L("её", "it"), L("их", "them"), L("их", "them")) + L(" прочитала", ""));
           }
           q.time = 0; q.cap = 0; q.lost = 0;
         });
@@ -360,8 +387,8 @@
         st.reb += 1;
         st.rebLeft = REBAL_TICKS;
         assign();
-        j("t-bad", "РЕБАЛАНС", why + " → чтение всей группы стоит " +
-          (REBAL_TICKS * TICK / 1000).toFixed(1) + " с, партиции раздаются заново");
+        j("t-bad", L("РЕБАЛАНС", "REBALANCE"), why + L(" → чтение всей группы стоит ", " → the whole group stops reading for ") +
+          (REBAL_TICKS * TICK / 1000).toFixed(1) + L(" с, партиции раздаются заново", " s, the partitions are handed out again"));
       }
 
       /** Какая доля потока приходится на каждую партицию.
@@ -397,7 +424,8 @@
         return per;
       }
 
-      function dec(x) { return (Math.round(x * 10) / 10).toString().replace(".", ","); }
+      /* Дробный разделитель — часть языка, а не числа: в русском запятая, в английском точка. */
+      function dec(x) { return (Math.round(x * 10) / 10).toString().replace(".", L(",", ".")); }
 
       function render() {
         var lag = 0, hot = -1, hotLag = -1;
@@ -414,14 +442,14 @@
 
         stTotal.set(util.num(st.total));
         stLag.set(util.num(lag), lag === 0 ? "good" : lag < 12 ? "warn" : "bad");
-        stCons.set(st.rebLeft > 0 ? "РЕБАЛАНС" : work + " / " + idle,
+        stCons.set(st.rebLeft > 0 ? L("РЕБАЛАНС", "REBALANCE") : work + " / " + idle,
           st.rebLeft > 0 || work === 0 ? "bad" : idle > 0 ? "warn" : "read");
         stReb.set(util.num(st.reb));
         stLost.set(util.num(st.lost), st.lost > 0 ? "bad" : "good");
 
-        prodMeta.textContent = cfg.rate + " сообщ/с · " + strategyName();
-        topicBadge.textContent = "топик orders · " + cfg.parts + " " +
-          util.plural(cfg.parts, "партиция", "партиции", "партиций");
+        prodMeta.textContent = cfg.rate + L(" сообщ/с · ", " msg/s · ") + strategyName();
+        topicBadge.textContent = L("топик orders · ", "topic orders · ") + cfg.parts + " " +
+          util.plural(cfg.parts, L("партиция", "partition"), L("партиции", "partitions"), L("партиций", "partitions"));
         consRow.style.opacity = st.rebLeft > 0 ? ".45" : "1";
 
         paintMarkers();
@@ -438,29 +466,43 @@
         });
 
         var verdict;
-        if (st.rebLeft > 0) verdict = "<b>РЕБАЛАНС</b> — группа не читает вообще, lag растёт на полной скорости продюсера";
-        else if (cfg.cons === 0) verdict = "<b>в группе никого</b> — читать некому, весь поток уходит в lag";
-        else if (cap === 0) verdict = "<b>обработка 0/с</b> — консьюмеры держат партиции, но не разбирают ничего";
-        else if (cap < cfg.rate) verdict = "дефицит <b>−" + (cfg.rate - cap) + "/с</b> — примерно на столько lag растёт каждую секунду";
+        if (st.rebLeft > 0) verdict = L("<b>РЕБАЛАНС</b> — группа не читает вообще, lag растёт на полной скорости продюсера",
+          "<b>REBALANCE</b> — the group is not reading at all, lag grows at the producer’s full speed");
+        else if (cfg.cons === 0) verdict = L("<b>в группе никого</b> — читать некому, весь поток уходит в lag",
+          "<b>nobody in the group</b> — there is no one to read, the whole stream turns into lag");
+        else if (cap === 0) verdict = L("<b>обработка 0/с</b> — консьюмеры держат партиции, но не разбирают ничего",
+          "<b>processing 0/s</b> — the consumers hold their partitions but work through nothing");
+        else if (cap < cfg.rate) verdict = L("дефицит <b>−", "shortfall <b>−") + (cfg.rate - cap) +
+          L("/с</b> — примерно на столько lag растёт каждую секунду", "/s</b> — roughly how much lag grows every second");
         else if (worst >= 0 && over > 0.01) {
-          verdict = "в сумме запас есть, но на <b>C" + (worst + 1) + "</b> одного идёт <b>" + dec(load[worst]) +
-            "/с</b> при его <b>" + cfg.speed + "/с</b>: его партиции не разделить ни с кем — " +
-            "<b>потолок группы недостижим</b>, лишнее копится в них, пока у соседей простаивает запас";
-        } else if (lag === 0) verdict = "запас <b>+" + (cap - cfg.rate) + "/с</b>, lag держится у нуля";
-        else if (cap === cfg.rate) verdict = "запас <b>+0/с</b> — каждому несут ровно столько, сколько он тянет: " +
-          "накопленные <b>" + lag + "</b> так и останутся висеть, разбирать их нечем";
-        else verdict = "запас <b>+" + (cap - cfg.rate) + "/с</b> — lag рассасывается";
+          verdict = L("в сумме запас есть, но на <b>C", "in total there is headroom, but <b>C") + (worst + 1) +
+            L("</b> одного идёт <b>", "</b> alone is handed <b>") + dec(load[worst]) +
+            L("/с</b> при его <b>", "/s</b> against its own <b>") + cfg.speed +
+            L("/с</b>: его партиции не разделить ни с кем — ", "/s</b>: its partitions cannot be shared with anyone — ") +
+            L("<b>потолок группы недостижим</b>, лишнее копится в них, пока у соседей простаивает запас",
+              "<b>the group ceiling is out of reach</b>, the surplus piles up there while the neighbours’ headroom sits unused");
+        } else if (lag === 0) verdict = L("запас <b>+", "headroom <b>+") + (cap - cfg.rate) +
+          L("/с</b>, lag держится у нуля", "/s</b>, lag stays at zero");
+        else if (cap === cfg.rate) verdict = L("запас <b>+0/с</b> — каждому несут ровно столько, сколько он тянет: ",
+          "headroom <b>+0/s</b> — each one is handed exactly as much as it can take: ") +
+          L("накопленные <b>", "the <b>") + lag +
+          L("</b> так и останутся висеть, разбирать их нечем", "</b> already piled up will just hang there; there is nothing spare to work through them");
+        else verdict = L("запас <b>+", "headroom <b>+") + (cap - cfg.rate) +
+          L("/с</b> — lag рассасывается", "/s</b> — lag is draining");
 
         var extra = idle > 0
-          ? " · простаивает <b>" + idle + "</b> " + util.plural(idle, "консьюмер", "консьюмера", "консьюмеров") +
-          ": партиций " + cfg.parts + ", консьюмеров " + cfg.cons
+          ? L(" · простаивает <b>", " · <b>") + idle + "</b> " +
+          util.plural(idle, L("консьюмер", "consumer idle"), L("консьюмера", "consumers idle"), L("консьюмеров", "consumers idle")) +
+          L(": партиций ", ": partitions ") + cfg.parts + L(", консьюмеров ", ", consumers ") + cfg.cons
           : "";
         var skew = (cfg.parts > 1 && lag >= 8 && hotLag > lag * 0.6)
-          ? " · перекос: <b>p" + hot + "</b> держит " + Math.round(hotLag / lag * 100) + " % всего lag"
+          ? L(" · перекос: <b>p", " · skew: <b>p") + hot + L("</b> держит ", "</b> holds ") +
+          Math.round(hotLag / lag * 100) + L(" % всего lag", " % of all the lag")
           : "";
 
-        stage.say("продюсер <b>" + cfg.rate + "/с</b> · потолок группы <b>" + work + " × " + cfg.speed +
-          " = " + cap + "/с</b> → " + verdict + extra + skew);
+        stage.say(L("продюсер <b>", "producer <b>") + cfg.rate +
+          L("/с</b> · потолок группы <b>", "/s</b> · group ceiling <b>") + work + " × " + cfg.speed +
+          " = " + cap + L("/с</b> → ", "/s</b> → ") + verdict + extra + skew);
       }
 
       function tick() {
@@ -477,14 +519,15 @@
         if (writes.length) {
           var by = {};
           writes.forEach(function (w) { by[w.p] = (by[w.p] || 0) + 1; });
-          j("t-w", "запись", "×" + writes.length + "   " + Object.keys(by).sort().map(function (p) {
+          j("t-w", L("запись", "write"), "×" + writes.length + "   " + Object.keys(by).sort().map(function (p) {
             return "p" + p + "×" + by[p];
-          }).join("  ") + "   " + util.escape(writes[writes.length - 1].key || "без ключа"));
+          }).join("  ") + "   " + util.escape(writes[writes.length - 1].key || L("без ключа", "no key")));
         }
 
         if (st.rebLeft > 0) {
           st.rebLeft -= 1;
-          if (st.rebLeft === 0) j("t-good", "ребаланс", "завершён — группа снова читает с committed");
+          if (st.rebLeft === 0) j("t-good", L("ребаланс", "rebalance"),
+            L("завершён — группа снова читает с committed", "done — the group reads from committed again"));
         } else {
           consume();
         }
@@ -504,72 +547,77 @@
       /* ================= контролы ================= */
 
       var pRange = ui.range({
-        label: "партиций", min: 1, max: 6, value: cfg.parts,
+        label: L("партиций", "partitions"), min: 1, max: 6, value: cfg.parts,
         onInput: function (v) {
           cfg.parts = v;
           buildTopic();
-          j("t-dim", "топик пересобран", v + " " + util.plural(v, "партиция", "партиции", "партиций") +
-            ": ключи раскладываются заново, лог начат с нуля");
+          j("t-dim", L("топик пересобран", "topic rebuilt"),
+            v + " " + util.plural(v, L("партиция", "partition"), L("партиции", "partitions"), L("партиций", "partitions")) +
+            L(": ключи раскладываются заново, лог начат с нуля", ": the keys are spread again, the log starts from zero"));
           noteKeyShortage();
-          rebalance("изменилось число партиций");
+          rebalance(L("изменилось число партиций", "the number of partitions changed"));
           render();
         }
       });
 
       var rateRange = ui.range({
-        label: "продюсер", min: 0, max: 12, value: cfg.rate, unit: "/с",
-        onInput: function (v) { cfg.rate = v; j("t-w", "продюсер", v + " сообщ/с"); render(); }
+        label: L("продюсер", "producer"), min: 0, max: 12, value: cfg.rate, unit: L("/с", "/s"),
+        onInput: function (v) { cfg.rate = v; j("t-w", L("продюсер", "producer"), v + L(" сообщ/с", " msg/s")); render(); }
       });
 
       var keySeg = ui.seg([
-        { value: "users", label: "5 ключей" },
-        { value: "hot", label: "горячий" },
-        { value: "none", label: "без ключа" }
+        { value: "users", label: L("5 ключей", "5 keys") },
+        { value: "hot", label: L("горячий", "hot") },
+        { value: "none", label: L("без ключа", "no key") }
       ], cfg.strategy, function (v) {
         cfg.strategy = v;
-        j("t-w", "стратегия ключа", strategyName());
+        j("t-w", L("стратегия ключа", "key strategy"), strategyName());
         noteKeyShortage();
         render();
       });
 
       var consRange = ui.range({
-        label: "консьюмеров", min: 0, max: 6, value: cfg.cons,
+        label: L("консьюмеров", "consumers"), min: 0, max: 6, value: cfg.cons,
         onInput: function (v) {
           cfg.cons = v;
-          rebalance("в группе теперь " + v + " " + util.plural(v, "консьюмер", "консьюмера", "консьюмеров"));
+          rebalance(L("в группе теперь ", "the group now has ") + v + " " +
+            util.plural(v, L("консьюмер", "consumer"), L("консьюмера", "consumers"), L("консьюмеров", "consumers")));
           render();
         }
       });
 
       var speedRange = ui.range({
-        label: "обработка", min: 0, max: 8, value: cfg.speed, unit: "/с",
-        onInput: function (v) { cfg.speed = v; j("t-r", "обработка", v + " сообщ/с на консьюмера"); render(); }
+        label: L("обработка", "processing"), min: 0, max: 8, value: cfg.speed, unit: L("/с", "/s"),
+        onInput: function (v) { cfg.speed = v; j("t-r", L("обработка", "processing"), v + L(" сообщ/с на консьюмера", " msg/s per consumer")); render(); }
       });
 
       var keepRange = ui.range({
-        label: "хранить", min: 5, max: 60, value: cfg.keep, unit: "с",
-        onInput: function (v) { cfg.keep = v; j("t-dim", "retention", "хранить " + v + " с"); render(); }
+        label: L("хранить", "keep for"), min: 5, max: 60, value: cfg.keep, unit: L("с", "s"),
+        onInput: function (v) { cfg.keep = v; j("t-dim", "retention", L("хранить ", "keep for ") + v + L(" с", " s")); render(); }
       });
 
-      var pauseBtn = ui.btn("Пауза", function () {
+      var pauseBtn = ui.btn(L("Пауза", "Pause"), function () {
         st.run = !st.run;
-        pauseBtn.textContent = st.run ? "Пауза" : "Пуск";
-        j("t-dim", st.run ? "пуск" : "пауза", st.run ? "время идёт" : "время стоит, ручки и «шаг» работают");
+        pauseBtn.textContent = st.run ? L("Пауза", "Pause") : L("Пуск", "Run");
+        j("t-dim", st.run ? L("пуск", "run") : L("пауза", "pause"),
+          st.run ? L("время идёт", "time is running")
+            : L("время стоит, ручки и «шаг» работают", "time is stopped; the knobs and “step” still work"));
         render();
       }, { sm: true });
 
-      var stepBtn = ui.btn("Шаг", function () { tick(); }, { sm: true, variant: "ghost", title: "один такт 250 мс" });
+      var stepBtn = ui.btn(L("Шаг", "Step"), function () { tick(); },
+        { sm: true, variant: "ghost", title: L("один такт 250 мс", "one tick, 250 ms") });
 
-      var killBtn = ui.btn("Убить консьюмера", function () {
-        if (cfg.cons <= 0) { j("t-dim", "некого убивать", "в группе и так пусто"); return; }
+      var killBtn = ui.btn(L("Убить консьюмера", "Kill a consumer"), function () {
+        if (cfg.cons <= 0) { j("t-dim", L("некого убивать", "nobody to kill"), L("в группе и так пусто", "the group is empty already")); return; }
         var dead = cfg.cons;
         cfg.cons -= 1;
         consRange.set(cfg.cons);
-        rebalance("консьюмер C" + dead + " отвалился");
+        rebalance(L("консьюмер C", "consumer C") + dead + L(" отвалился", " dropped out"));
         render();
       }, { sm: true, variant: "danger" });
 
-      var resetBtn = ui.btn("Сброс", function () { reset(); }, { sm: true, variant: "ghost" });
+      var resetBtn = ui.btn(L("Сброс", "Reset"), function () { reset(); }, { sm: true, variant: "ghost" });
 
       function reset() {
         cfg.parts = DEF.parts; cfg.rate = DEF.rate; cfg.strategy = DEF.strategy;
@@ -581,14 +629,15 @@
         jLines = [];
         lastIdle = "";
         term.clear();
-        pauseBtn.textContent = "Пауза";
+        pauseBtn.textContent = L("Пауза", "Pause");
         buildTopic();
-        j("t-dim", "сброс", "3 партиции · продюсер 4/с · 2 консьюмера по 3/с · retention 20 с");
+        j("t-dim", L("сброс", "reset"), L("3 партиции · продюсер 4/с · 2 консьюмера по 3/с · retention 20 с",
+          "3 partitions · producer 4/s · 2 consumers at 3/s each · retention 20 s"));
         warmUp();
       }
 
       KV.append(stage.controls,
-        pRange.el, rateRange.el, ui.ctl("ключ", keySeg.el),
+        pRange.el, rateRange.el, ui.ctl(L("ключ", "key"), keySeg.el),
         consRange.el, speedRange.el, keepRange.el,
         el("div.kv-row", null, pauseBtn, stepBtn, killBtn, resetBtn));
 
@@ -601,27 +650,28 @@
         logBox,
         el("div", { style: { "margin": "12px 0 16px" } },
           ui.legend([
-            { color: "var(--write)", label: "LEO — конец лога, куда пишет продюсер" },
-            { color: "var(--read)", label: "флажок committed — докуда дочитала группа" },
-            { color: "var(--muted)", label: "«•» — запись без ключа" }
+            { color: "var(--write)", label: L("LEO — конец лога, куда пишет продюсер", "LEO — the end of the log, where the producer writes") },
+            { color: "var(--read)", label: L("флажок committed — докуда дочитала группа", "the committed flag — how far the group has read") },
+            { color: "var(--muted)", label: L("«•» — запись без ключа", "“•” — a record with no key") }
           ])),
         el("div.kv-col", null,
-          ui.panel("Состояние партиций", tableBox),
-          ui.panel("Журнал событий", term.el)));
+          ui.panel(L("Состояние партиций", "Partition state"), tableBox),
+          ui.panel(L("Журнал событий", "Event log"), term.el)));
 
       root.appendChild(stage.el);
 
       /* ================= запуск ================= */
 
       buildTopic();
-      j("t-dim", "старт", "3 партиции · продюсер 4/с · 2 консьюмера по 3/с · retention 20 с");
+      j("t-dim", L("старт", "start"), L("3 партиции · продюсер 4/с · 2 консьюмера по 3/с · retention 20 с",
+        "3 partitions · producer 4/s · 2 consumers at 3/s each · retention 20 s"));
       warmUp();   // стенд открывается уже живым
 
       api.interval(TICK, function () { if (st.run) tick(); });
 
       /* ================= разбор ================= */
 
-      root.appendChild(ui.prose(
+      root.appendChild(ui.prose(L(
         "<h3>Что именно ты крутишь</h3>" +
         "<ul>" +
         "<li><strong>Потолок группы = число НЕ простаивающих консьюмеров × скорость каждого.</strong> " +
@@ -646,26 +696,66 @@
         "В жизни партиции можно только <b>добавлять</b> (уменьшать — нельзя), данные при этом не удаляются и " +
         "[[offset|offset'ы]] не сбрасываются, но старые ключи с этого момента считаются по новому модулю и " +
         "разъезжаются по другим партициям — порядок по ключу на стыке ломается. " +
-        "Остальное — скорости, [[lag]], [[committed offset|committed]], [[retention]] — считается честно.</p>"
-      ));
+        "Остальное — скорости, [[lag]], [[committed offset|committed]], [[retention]] — считается честно.</p>",
 
-      root.appendChild(ui.note("bad", "ловушка",
+        "<h3>What exactly you are turning</h3>" +
+        "<ul>" +
+        "<li><strong>The group ceiling = the number of NON-idle consumers × the speed of each.</strong> " +
+        "A seventh consumer on six partitions adds exactly zero: a [[partition]] is read by at most one member of the group. " +
+        "And it really is a <em>ceiling</em>, not a promise: the stream is split between the consumers the way the keys fell across the partitions. " +
+        "Turn the hot key on and whoever got the hot partition hits THEIR OWN speed limit, even though the group still has headroom " +
+        "“in total”. There is no one to share that partition with, so the sum of the speeds saves nothing here.</li>" +
+        "<li><strong>[[lag]] is the integral of the difference.</strong> A shortfall of 3 messages per second adds +180 to lag over a minute and will not drain on its own: " +
+        "a spike gets worked off, a permanent shortfall does not.</li>" +
+        "<li><strong>A [[rebalance]] is a freeze-frame for the whole group.</strong> That is how the classic (eager) strategy behaves, and it is the one the sandbox shows: while the partitions are handed out again, nobody reads, " +
+        "including those whose assignment did not change at all. The producer, meanwhile, does not stop.</li>" +
+        "<li><strong>A [[hot key]] shows up in a row, not in the total.</strong> Total lag can look modest " +
+        "while one partition holds almost all of it — compare the partitions with each other, not with zero.</li>" +
+        "</ul>" +
+        "<p>What is simplified here: a [[rebalance]] always lasts exactly 2 seconds, and the new assignment is visible right at its start " +
+        "(in Kafka it arrives at the end); “kill a consumer” always takes the highest-numbered one; a strip holds at most " +
+        "44 cells — in real Kafka that limit is set by <code>retention.bytes</code>. In “no key” mode the demo spreads records " +
+        "strictly around the ring, one record per partition; a real producer since Kafka 2.4 does it “stickily” — " +
+        "it fills one partition with a whole batch and only then takes the next, so it evens out across batches, not across messages " +
+        "(and it is the producer that decides this, by the way, not the broker). And the big one: the “partitions” slider " +
+        "here rebuilds the topic from scratch, so that the new key layout is visible right away. " +
+        "In real life partitions can only be <b>added</b> (never removed), no data is deleted in the process and " +
+        "[[offset|offsets]] are not reset, but from that moment old keys are hashed modulo the new number and " +
+        "scatter into other partitions — order by key breaks at the seam. " +
+        "Everything else — the speeds, [[lag]], [[committed offset|committed]], [[retention]] — is computed honestly.</p>"
+      )));
+
+      root.appendChild(ui.note("bad", L("ловушка", "trap"), L(
         "<p>Следи за плиткой «съедено непрочитанным». Когда [[retention]] начинает удалять записи, до которых группа не дошла, " +
         "<b>lag падает сам собой</b> — на дашборде это выглядит как «догнали». На самом деле это потеря данных: " +
         "единственная метрика, которая её покажет, — счётчик пропущенных, а не lag.</p>" +
         "<p>Механика внутри: [[committed offset|committed]] группы оказывается левее начала лога, консьюмер получает " +
         "<code>OffsetOutOfRange</code> и по <code>auto.offset.reset</code> прыгает вперёд — на первое уцелевшее сообщение " +
         "(<code>earliest</code>, так считает стенд) или сразу в конец лога (<code>latest</code>, значение по умолчанию). " +
-        "Пропуск — ровно этот прыжок, и никакого следа в lag он не оставляет.</p>"
-      ));
+        "Пропуск — ровно этот прыжок, и никакого следа в lag он не оставляет.</p>",
 
-      root.appendChild(ui.takeaway([
+        "<p>Keep an eye on the “eaten unread” tile. When [[retention]] starts deleting records the group never reached, " +
+        "<b>lag drops all by itself</b> — on a dashboard that looks like “we caught up”. It is data loss: " +
+        "the only metric that will show it is the counter of skipped records, not lag.</p>" +
+        "<p>The mechanics behind it: the group’s [[committed offset|committed]] ends up to the left of the start of the log, the consumer gets " +
+        "<code>OffsetOutOfRange</code> and, following <code>auto.offset.reset</code>, jumps forward — to the first surviving message " +
+        "(<code>earliest</code>, which is what this demo does) or straight to the end of the log (<code>latest</code>, the default). " +
+        "The skip is exactly that jump, and it leaves no trace at all in lag.</p>"
+      )));
+
+      root.appendChild(ui.takeaway(L([
         "Потолок группы = <b>консьюмеры, которым достались партиции</b> × скорость каждого. Лишние сверх числа партиций просто стоят. Но это потолок, а не пропускная способность: перекошенный ключ упирает одного консьюмера в его собственную скорость, и группа не догоняет при любой сумме.",
         "[[lag]] растёт ровно на разницу «пишут минус читают». Устойчивый рост — это дефицит мощности, а не всплеск.",
         "[[ребаланс]] останавливает чтение у <b>всей</b> группы, а запись — нет. Каждый рестарт консьюмера оплачивается ростом lag.",
         "[[hot key]] перекашивает одну партицию: смотри распределение lag по партициям, а не только сумму.",
         "[[retention]] не спрашивает, прочитали ли. Не успел — данные ушли, и <b>lag при этом уменьшится</b>."
-      ]));
+      ], [
+        "The group ceiling = <b>the consumers that actually got partitions</b> × the speed of each. The extras beyond the number of partitions just stand there. But it is a ceiling, not throughput: a skewed key pins one consumer to its own speed, and the group never catches up no matter what the sum says.",
+        "[[lag]] grows by exactly the difference “writes minus reads”. Steady growth is a capacity shortfall, not a spike.",
+        "A [[rebalance]] stops reading for the <b>whole</b> group; writing carries on. Every consumer restart is paid for in lag.",
+        "A [[hot key]] skews one partition: look at how lag is spread across the partitions, not only at the total.",
+        "[[retention]] does not ask whether anyone has read. Miss it and the data is gone — and <b>lag goes down</b> as it happens."
+      ])));
     }
   });
 })();

@@ -1,4 +1,6 @@
 /* Карусель для LinkedIn. Запуск: node build-carousel.js ../dist/kafka-linkedin.pdf
+   Язык третьим аргументом: «... kafka-linkedin-ru.pdf ru». По умолчанию английский —
+   карусель уходит в ленту, а русская сборка живёт тем же кодом и теми же кадрами.
 
    Здесь НЕТ ни одной кнопки и ни одного поля формы — сознательно.
    LinkedIn превращает загруженный документ в набор картинок, поэтому
@@ -14,7 +16,8 @@ const path = require("path");
 const fontkit = require("@pdf-lib/fontkit");
 const { PDFDocument, rgb } = require("pdf-lib");
 const L = require("./lib");
-const { C, KEYS } = L;
+L.langFromArgv();
+const { C, KEYS, T } = L;
 
 const OUT = process.argv[2] || "../dist/kafka-linkedin.pdf";
 const SITE = "warhammer2000.github.io/kafka-na-palcah";
@@ -44,11 +47,27 @@ function guard(page, no) {
     }
     return rect(o);
   };
+  /* Подписи, наехавшие друг на друга. Сторож границ этого не видит: обе
+     строки внутри карточки, просто в одной точке. Живой пример — «LEO 0»
+     поверх «ПАРТИЦИЯ 0» на кадре с пустой лентой; глазами это ловится только
+     если пересмотреть все десять слайдов, а их пересматривают не всегда. */
+  const drawn = [];
   page.drawText = (s, o) => {
-    const w = (o.font || F.sans).widthOfTextAtSize(String(s), o.size || 12);
+    const str = String(s);
+    const size = o.size || 12;
+    const w = (o.font || F.sans).widthOfTextAtSize(str, size) + (o.characterSpacing || 0) * str.length;
     if (o.x < L0 || o.x + w > R0 || o.y < B0 || o.y > T0) {
-      VIOL.push(`слайд ${no}: текст «${String(s).slice(0, 34)}» x=${Math.round(o.x)}..${Math.round(o.x + w)} y=${Math.round(o.y)}`);
+      VIOL.push(`слайд ${no}: текст «${str.slice(0, 34)}» x=${Math.round(o.x)}..${Math.round(o.x + w)} y=${Math.round(o.y)}`);
     }
+    const box = { x: o.x, y: o.y - size * 0.22, w, h: size * 0.94, s: str };
+    for (const b of drawn) {
+      if (box.x + box.w <= b.x || b.x + b.w <= box.x) continue;
+      if (box.y + box.h <= b.y || b.y + b.h <= box.y) continue;
+      VIOL.push(`слайд ${no}: «${str.slice(0, 22)}» налезает на «${b.s.slice(0, 22)}» ` +
+        `(x ${Math.round(box.x)}..${Math.round(box.x + box.w)}, y ${Math.round(box.y)})`);
+      break;
+    }
+    drawn.push(box);
     return text(s, o);
   };
   return page;
@@ -166,7 +185,7 @@ function strip(page, top, st) {
   const x0 = CX;
   const y = top - 34 - CELL;   // top — базовая линия подписи над лентой
 
-  page.drawText("ПАРТИЦИЯ 0", { x: x0, y: top, size: 18, font: F.mono, color: C.ink2, characterSpacing: 2 });
+  page.drawText(T("ПАРТИЦИЯ 0", "PARTITION 0"), { x: x0, y: top, size: 18, font: F.mono, color: C.ink2, characterSpacing: 2 });
 
   for (let i = 0; i < NCELL; i++) {
     const on = i < st.written;
@@ -190,14 +209,18 @@ function strip(page, top, st) {
     });
   }
 
-  // конец лога: вертикальная черта, подпись прижата внутрь карточки
+  /* Конец лога: вертикальная черта, подпись прижата внутрь карточки.
+     Подпись идёт СВОЕЙ строкой, на 22 пункта ниже заголовка ленты. На той же
+     строке она держалась, пока лента была непустой: у кадра с written = 0
+     черта стоит у самого левого края, и «LEO 0» ложилось поверх «ПАРТИЦИЯ 0»
+     — то есть ровно на первом кадре, с которого читатель и начинает. */
   if (st.written <= NCELL) {
     const lx = x0 + st.written * STEP - 4;
     page.drawRectangle({ x: lx, y: y - 6, width: 3, height: CELL + 12, color: C.write });
     const cap = "LEO " + st.written;
     const cw = F.mono.widthOfTextAtSize(cap, 18);
     const cxp = Math.min(lx + 10, CX + CW - cw);
-    page.drawText(cap, { x: cxp, y: top, size: 18, font: F.mono, color: C.write });
+    page.drawText(cap, { x: cxp, y: y + CELL + 12, size: 18, font: F.mono, color: C.write });
   }
 
   // закладки: подпись группы идёт СЛЕВА от ленты не помещается,
@@ -220,7 +243,8 @@ function bookmark(page, x0, y, pos, letter, color, note) {
     x: x + (CELL - F.mono.widthOfTextAtSize(t, 20)) / 2,
     y: y + 9, size: 20, font: F.mono, color: C.white,
   });
-  const lbl = note ? "группа " + letter + " · " + note : "группа " + letter;
+  const g = T("группа ", "group ") + letter;
+  const lbl = note ? g + " · " + note : g;
   const lw = F.mono.widthOfTextAtSize(lbl, 16);
   page.drawText(lbl, {
     x: Math.min(x + CELL + 14, CX + CW - lw),
@@ -255,31 +279,35 @@ async function main() {
     mono: await doc.embedFont(fs.readFileSync(path.join(dir, "Mono.ttf")), { subset: true }),
     monoBold: await doc.embedFont(fs.readFileSync(path.join(dir, "Mono-Bold.ttf")), { subset: true }),
   };
-  doc.setTitle("Kafka на пальцах");
-  doc.setSubject("Почему Kafka — не очередь, и что из этого следует");
+  doc.setTitle(T("Kafka на пальцах", "Kafka hands-on"));
+  doc.setSubject(T("Почему Kafka — не очередь, и что из этого следует",
+    "Why Kafka is not a queue, and what follows from that"));
 
   /* --- 01 обложка --- */
   {
     const s = slide({
-      eyebrow: "разбор для тех, кому не зашло",
-      title: "Kafka — это не очередь.",
-      lede: "И пока держишь в голове очередь, ничего не сходится: ни перемотка, ни ребалансы, ни потерянные сообщения.",
+      eyebrow: T("разбор для тех, кому не зашло", "for everyone kafka never clicked for"),
+      title: T("Kafka — это не очередь.", "Kafka is not a queue."),
+      lede: T("И пока держишь в голове очередь, ничего не сходится: ни перемотка, ни ребалансы, ни потерянные сообщения.",
+        "And while you keep a queue in your head, nothing adds up: not replay, not rebalances, not the messages you lose."),
     });
     strip(s.page, s.top, { written: 10, posA: 6, posB: 3 });
-    footnote(s.page, "Десять слайдов, чтобы это наконец щёлкнуло. Листай.", C.write);
+    footnote(s.page, T("Десять слайдов, чтобы это наконец щёлкнуло. Листай.",
+      "Ten slides to make it finally click. Swipe."), C.write);
   }
 
   /* --- 02 очередь против лога --- */
   {
     const s = slide({
-      eyebrow: "разница в одном",
-      title: "Очередь удаляет. Лог оставляет.",
-      lede: "В RabbitMQ сообщение доставили и стёрли. В Kafka записали и оставили лежать.",
+      eyebrow: T("разница в одном", "the whole difference"),
+      title: T("Очередь удаляет. Лог оставляет.", "A queue deletes. A log keeps."),
+      lede: T("В RabbitMQ сообщение доставили и стёрли. В Kafka записали и оставили лежать.",
+        "RabbitMQ delivers the message and wipes it. Kafka writes it down and leaves it lying there."),
     });
     const x0 = CX;
     let y = s.top - 40;
 
-    s.page.drawText("ОЧЕРЕДЬ ПОСЛЕ ЧТЕНИЯ", { x: x0, y, size: 18, font: F.mono, color: C.bad, characterSpacing: 2 });
+    s.page.drawText(T("ОЧЕРЕДЬ ПОСЛЕ ЧТЕНИЯ", "QUEUE AFTER READING"), { x: x0, y, size: 18, font: F.mono, color: C.bad, characterSpacing: 2 });
     y -= 100;
     for (let i = 0; i < 6; i++) {
       const gone = i < 3;
@@ -296,7 +324,7 @@ async function main() {
       }
     }
     y -= 90;
-    s.page.drawText("ЛОГ ПОСЛЕ ЧТЕНИЯ", { x: x0, y, size: 18, font: F.mono, color: C.good, characterSpacing: 2 });
+    s.page.drawText(T("ЛОГ ПОСЛЕ ЧТЕНИЯ", "LOG AFTER READING"), { x: x0, y, size: 18, font: F.mono, color: C.good, characterSpacing: 2 });
     y -= 100;
     for (let i = 0; i < 6; i++) {
       s.page.drawRectangle({
@@ -304,30 +332,39 @@ async function main() {
         color: KEYS[SEQ[i].c], borderColor: KEYS[SEQ[i].c], borderWidth: 1.5,
       });
     }
-    bookmark(s.page, x0, y - 54, 3, "A", C.read, "прочитала до сюда");
+    bookmark(s.page, x0, y - 54, 3, "A", C.read, T("прочитала до сюда", "read up to here"));
 
-    footnote(s.page, "Читатель двигает только свою закладку. Записи остаются на месте — поэтому их можно перечитать.", C.good);
+    footnote(s.page, T("Читатель двигает только свою закладку. Записи остаются на месте — поэтому их можно перечитать.",
+      "A consumer moves only its own bookmark. The records stay where they are — that is why they can be read again."), C.good);
   }
 
   /* --- 03-05 кадры: лог наполняется --- */
   const frames = [
-    { written: 0, posA: 0, posB: 0, note: "Лог пуст. Обе группы стоят на offset 0 — читать ещё нечего." },
-    { written: 4, posA: 2, posB: 1, note: "Продюсер дописал четыре записи. Группы читают в своём темпе и уже разъехались." },
-    { written: 9, posA: 6, posB: 3, note: "Отставание видно глазом: у группы B накопилось шесть непрочитанных сообщений." },
+    { written: 0, posA: 0, posB: 0, note: T("Лог пуст. Обе группы стоят на offset 0 — читать ещё нечего.",
+      "The log is empty. Both groups sit at offset 0 — there is nothing to read yet.") },
+    { written: 4, posA: 2, posB: 1, note: T("Продюсер дописал четыре записи. Группы читают в своём темпе и уже разъехались.",
+      "The producer appended four records. The groups read at their own pace and have already drifted apart.") },
+    { written: 9, posA: 6, posB: 3, note: T("Отставание видно глазом: у группы B накопилось шесть непрочитанных сообщений.",
+      "The lag is plain to see: group B has six unread messages piled up behind its bookmark.") },
   ];
   const FRAME_TOP = 976;   // одна отметка на все три кадра, см. floor в slide()
   frames.forEach((f, i) => {
     const s = slide({
-      eyebrow: "кадр " + (i + 1) + " из 3",
-      title: i === 0 ? "Каждый читатель\nсо своей закладкой" : (i === 1 ? "Продюсер пишет\nв конец" : "Так выглядит lag"),
-      lede: i === 2 ? "lag = конец лога минус позиция группы. Главная метрика здоровья: насколько устарели данные прямо сейчас." : "",
+      eyebrow: T("кадр " + (i + 1) + " из 3", "frame " + (i + 1) + " of 3"),
+      title: i === 0
+        ? T("Каждый читатель\nсо своей закладкой", "Every consumer\nhas its own bookmark")
+        : (i === 1
+          ? T("Продюсер пишет\nв конец", "The producer writes\nto the end")
+          : T("Так выглядит lag", "This is what lag looks like")),
+      lede: i === 2 ? T("lag = конец лога минус позиция группы. Главная метрика здоровья: насколько устарели данные прямо сейчас.",
+        "lag = end of the log minus the position of the group. The health metric that matters: how stale the data is right now.") : "",
       floor: FRAME_TOP,
     });
     const y = strip(s.page, s.top, f);
     stats(s.page, y, [
-      { label: "записей", value: f.written },
-      { label: "lag группы A", value: f.written - f.posA, tone: f.written - f.posA > 4 ? C.warn : C.ink },
-      { label: "lag группы B", value: f.written - f.posB, tone: f.written - f.posB > 4 ? C.bad : C.ink },
+      { label: T("записей", "records"), value: f.written },
+      { label: T("lag группы A", "lag of group A"), value: f.written - f.posA, tone: f.written - f.posA > 4 ? C.warn : C.ink },
+      { label: T("lag группы B", "lag of group B"), value: f.written - f.posB, tone: f.written - f.posB > 4 ? C.bad : C.ink },
     ]);
     footnote(s.page, f.note, i === 2 ? C.bad : C.write);
   });
@@ -335,20 +372,23 @@ async function main() {
   /* --- 06 перемотка --- */
   {
     const s = slide({
-      eyebrow: "чего очередь не умеет",
-      title: "Закладку можно\nперемотать назад",
-      lede: "Записи никуда не делись, поэтому историю читают заново — это и называется replay.",
+      eyebrow: T("чего очередь не умеет", "what a queue cannot do"),
+      title: T("Закладку можно\nперемотать назад", "A bookmark can be\nrewound"),
+      lede: T("Записи никуда не делись, поэтому историю читают заново — это и называется replay.",
+        "The records never went anywhere, so the history gets read again — that is what replay means."),
     });
     strip(s.page, s.top, { written: 9, posA: 0, posB: 3 });
-    footnote(s.page, "Новый сервис подключается к работающему топику и вычитывает всё, что было до него. В очереди такой кнопки не существует.", C.read);
+    footnote(s.page, T("Новый сервис подключается к работающему топику и вычитывает всё, что было до него. В очереди такой кнопки не существует.",
+      "A new service joins a live topic and reads through everything that happened before it. A queue has no such button."), C.read);
   }
 
   /* --- 07 ключ решает партицию --- */
   {
     const s = slide({
-      eyebrow: "закон kafka",
-      title: "Ключ решает,\nкуда ляжет запись",
-      lede: "номер партиции = hash(ключ) % количество партиций",
+      eyebrow: T("закон kafka", "the law of kafka"),
+      title: T("Ключ решает,\nкуда ляжет запись", "The key decides\nwhere a record lands"),
+      lede: T("номер партиции = hash(ключ) % количество партиций",
+        "partition number = hash(key) % number of partitions"),
     });
     const x0 = CX;
     const c = 64, st = c + 8;
@@ -360,7 +400,7 @@ async function main() {
     ];
     rows.forEach((row) => {
       const p = row[0];
-      s.page.drawText("партиция " + p, { x: x0, y: y + 22, size: 18, font: F.mono, color: C.ink2 });
+      s.page.drawText(T("партиция ", "partition ") + p, { x: x0, y: y + 22, size: 18, font: F.mono, color: C.ink2 });
       for (let i = 1; i < row.length; i++) {
         s.page.drawRectangle({
           x: x0 + 150 + (i - 1) * st, y, width: c, height: c,
@@ -370,27 +410,30 @@ async function main() {
       y -= 100;
     });
     y -= 10;
-    s.page.drawText("одинаковый ключ  →  одна партиция  →  порядок", {
+    s.page.drawText(T("одинаковый ключ  →  одна партиция  →  порядок",
+      "same key  →  same partition  →  order"), {
       x: x0, y, size: 24, font: F.monoBold, color: C.ink,
     });
-    footnote(s.page, "Порядок гарантирован только внутри партиции. Между партициями порядка нет вообще — ни общего счётчика, ни общего времени.", C.write);
+    footnote(s.page, T("Порядок гарантирован только внутри партиции. Между партициями порядка нет вообще — ни общего счётчика, ни общего времени.",
+      "Order is guaranteed inside a partition only. Across partitions there is no order at all: no shared counter, no shared clock."), C.write);
   }
 
   /* --- 08 перекос ключа --- */
   {
     const s = slide({
-      eyebrow: "как это ломается",
-      title: "Плохой ключ —\nи одна партиция горит",
+      eyebrow: T("как это ломается", "how it breaks"),
+      title: T("Плохой ключ —\nи одна партиция горит", "A bad key —\nand one partition burns"),
       /* Число в тексте и число на картинке обязаны сходиться: ниже рисуется
          восемь клеток в партиции 0 и по одной в соседних — итого десять. */
-      lede: "Если восемь из десяти событий идут с одним ключом, они лягут в одну партицию. Она перегружена, соседние простаивают.",
+      lede: T("Если восемь из десяти событий идут с одним ключом, они лягут в одну партицию. Она перегружена, соседние простаивают.",
+        "If eight events out of ten carry the same key, all eight land in one partition. It is overloaded, its neighbours idle."),
     });
     const x0 = CX;
     const c = 64, st = c + 8;
     let y = s.top - 70;
     const load = [8, 1, 1];
     load.forEach((n, p) => {
-      s.page.drawText("партиция " + p, { x: x0, y: y + 22, size: 18, font: F.mono, color: C.ink2 });
+      s.page.drawText(T("партиция ", "partition ") + p, { x: x0, y: y + 22, size: 18, font: F.mono, color: C.ink2 });
       for (let i = 0; i < 8; i++) {
         const on = i < n;
         s.page.drawRectangle({
@@ -399,21 +442,23 @@ async function main() {
           borderColor: on ? (p === 0 ? C.bad : KEYS[2]) : C.line, borderWidth: 1.5,
         });
       }
-      s.page.drawText(p === 0 ? "перегружена" : "простаивает", {
+      s.page.drawText(p === 0 ? T("перегружена", "overloaded") : T("простаивает", "idle"), {
         x: x0 + 150 + 8 * st + 16, y: y + 22, size: 18, font: F.mono,
         color: p === 0 ? C.bad : C.faint,
       });
       y -= 100;
     });
-    footnote(s.page, "Добавить потребителей не поможет: одну партицию в группе читает ровно один из них. Потолок задан числом партиций.", C.bad);
+    footnote(s.page, T("Добавить потребителей не поможет: одну партицию в группе читает ровно один из них. Потолок задан числом партиций.",
+      "Adding consumers will not help: inside a group one partition is read by exactly one of them. The ceiling is the partition count."), C.bad);
   }
 
   /* --- 09 acks --- */
   {
     const s = slide({
-      eyebrow: "самая дорогая ловушка",
-      title: "acks=all\nне значит «все»",
-      lede: "Он ждёт подтверждения всех реплик ИЗ ISR — списка тех, кто успевает за лидером. А список умеет схлопываться.",
+      eyebrow: T("самая дорогая ловушка", "the most expensive trap"),
+      title: T("acks=all\nне значит «все»", "acks=all\ndoes not mean “all”"),
+      lede: T("Он ждёт подтверждения всех реплик ИЗ ISR — списка тех, кто успевает за лидером. А список умеет схлопываться.",
+        "It waits for an acknowledgement from every replica IN THE ISR — the list of those keeping up with the leader. And that list can shrink."),
     });
     const x0 = CX;
     let y = s.top - 70;
@@ -427,19 +472,27 @@ async function main() {
       y -= 172;
     };
 
-    box("Реплики успевают", "ISR = [1, 2, 3]  ·  acks=all ждёт троих", "ДАННЫЕ ЦЕЛЫ", C.good);
-    box("Реплики отстали и выпали", "ISR = [1]  ·  acks=all ждёт ОДНОГО", "ТИХАЯ ПОТЕРЯ ПРИ ПАДЕНИИ ЛИДЕРА", C.bad);
-    box("min.insync.replicas = 2", "ISR = [1]  ·  запись не принимается", "ЯВНАЯ ОШИБКА — И ЭТО ХОРОШО", C.write);
+    box(T("Реплики успевают", "The replicas keep up"),
+      T("ISR = [1, 2, 3]  ·  acks=all ждёт троих", "ISR = [1, 2, 3]  ·  acks=all waits for three"),
+      T("ДАННЫЕ ЦЕЛЫ", "THE DATA IS SAFE"), C.good);
+    box(T("Реплики отстали и выпали", "The replicas fell behind and dropped out"),
+      T("ISR = [1]  ·  acks=all ждёт ОДНОГО", "ISR = [1]  ·  acks=all waits for ONE"),
+      T("ТИХАЯ ПОТЕРЯ ПРИ ПАДЕНИИ ЛИДЕРА", "SILENT LOSS WHEN THE LEADER DIES"), C.bad);
+    box("min.insync.replicas = 2",
+      T("ISR = [1]  ·  запись не принимается", "ISR = [1]  ·  the write is refused"),
+      T("ЯВНАЯ ОШИБКА — И ЭТО ХОРОШО", "AN OUTRIGHT ERROR — AND THAT IS GOOD"), C.write);
 
-    footnote(s.page, "Надёжная тройка, которую помнят как одно целое: replication.factor 3, acks=all, min.insync.replicas 2.", C.write);
+    footnote(s.page, T("Надёжная тройка, которую помнят как одно целое: replication.factor 3, acks=all, min.insync.replicas 2.",
+      "The reliable trio, remembered as one thing: replication.factor 3, acks=all, min.insync.replicas 2."), C.write);
   }
 
   /* --- 10 финал со ссылкой --- */
   {
     const s = slide({
-      eyebrow: "а теперь самое странное",
-      title: "Всё это —\nживое. В PDF.",
-      lede: "Слайды выше — кадры настоящих стендов. В PDF нет ни HTML, ни CSS, но есть поля форм и собственный JavaScript: клетки лога это кнопки, движение — таймер, подписи — текстовые поля.",
+      eyebrow: T("а теперь самое странное", "and now the strangest part"),
+      title: T("Всё это —\nживое. В PDF.", "All of this\nis live. In a PDF."),
+      lede: T("Слайды выше — кадры настоящих стендов. В PDF нет ни HTML, ни CSS, но есть поля форм и собственный JavaScript: клетки лога это кнопки, движение — таймер, подписи — текстовые поля.",
+        "The slides above are frames of real demos. A PDF has no HTML and no CSS, but it does have form fields and JavaScript of its own: the log cells are buttons, the motion is a timer, the captions are text fields."),
     });
     const x0 = M + PAD;
     let y = s.top - 40;
@@ -448,17 +501,21 @@ async function main() {
       x: x0, y: y - 120, width: W - M * 2 - PAD * 2, height: 120,
       color: C.surface2, borderColor: C.write, borderWidth: 3,
     });
-    s.page.drawText("Пятнадцать интерактивных глав:", { x: x0 + 32, y: y - 48, size: 24, font: F.sans, color: C.muted });
+    s.page.drawText(T("Пятнадцать интерактивных глав:", "Fifteen interactive chapters:"), { x: x0 + 32, y: y - 48, size: 24, font: F.sans, color: C.muted });
     s.page.drawText(SITE, { x: x0 + 32, y: y - 94, size: 28, font: F.monoBold, color: C.write });
 
     y -= 170;
-    s.page.drawText("Работает в браузере, в том числе на телефоне.", { x: x0, y, size: 24, font: F.sans, color: C.ink2 });
+    s.page.drawText(T("Работает в браузере, в том числе на телефоне.",
+      "Runs in a browser, phones included."), { x: x0, y, size: 24, font: F.sans, color: C.ink2 });
     y -= 40;
-    s.page.drawText("Версию с живыми стендами внутри PDF ищи по ссылке в тексте поста —", { x: x0, y, size: 22, font: F.sans, color: C.faint });
+    s.page.drawText(T("Версию с живыми стендами внутри PDF ищи по ссылке в тексте поста —",
+      "The version with live demos inside the PDF is linked in the post text —"), { x: x0, y, size: 22, font: F.sans, color: C.faint });
     y -= 32;
-    s.page.drawText("её нужно скачать и открыть на компьютере, в Chrome, Edge или Acrobat.", { x: x0, y, size: 22, font: F.sans, color: C.faint });
+    s.page.drawText(T("её нужно скачать и открыть на компьютере, в Chrome, Edge или Acrobat.",
+      "download it and open it on a desktop, in Chrome, Edge or Acrobat."), { x: x0, y, size: 22, font: F.sans, color: C.faint });
 
-    footnote(s.page, "Здесь, в ленте, всё это статично: LinkedIn превращает любой документ в картинки. Так что кнопок тут нет — они ждут в файле.", C.read);
+    footnote(s.page, T("Здесь, в ленте, всё это статично: LinkedIn превращает любой документ в картинки. Так что кнопок тут нет — они ждут в файле.",
+      "Here in the feed it is all static: LinkedIn turns any document into images. So there are no buttons here — they are waiting in the file."), C.read);
   }
 
   const bytes = await doc.save();

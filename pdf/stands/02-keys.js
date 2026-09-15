@@ -40,13 +40,20 @@ const KEYDEF = [
 
 module.exports = {
   id: "s2",
-  eyebrow: "стенд 02",
-  title: "Ключ решает партицию",
-  subtitle: "Продюсер не выбирает партицию руками — за него это делает ключ: номер = hash(ключ) % число партиций. Что из этого следует для порядка записей и что случается, когда один ключ перетягивает всё на себя?",
+  eyebrow: ["стенд 02", "demo 02"],
+  title: ["Ключ решает партицию", "The key picks the partition"],
+  subtitle: [
+    "Продюсер не выбирает партицию руками — за него это делает ключ: номер = hash(ключ) % число партиций. Что из этого следует для порядка записей и что случается, когда один ключ перетягивает всё на себя?",
+    "The producer doesn’t choose a partition by hand — the key chooses instead: number = hash(key) % partition count. What follows from that for record order, and what happens when one key drags everything onto itself?",
+  ],
 
   build(ctx, L, page) {
-    const { C, KEYS, PAGE, CELL, STEP } = L;
+    const { C, KEYS, PAGE, CELL, STEP, T } = L;
     const { fonts } = ctx;
+
+    /* Строки документного скрипта переводятся ЗДЕСЬ, при сборке: в просмотрщик
+       уезжает уже готовый литерал. J кладёт его в шаблон закавыченным. */
+    const J = (ru, en) => JSON.stringify(T(ru, en));
 
     const X0 = 120;            // слева место под подписи «партиция N»
     const ROW = [350, 310, 270];
@@ -88,7 +95,7 @@ module.exports = {
           x: X0 + i * STEP, y: ROW[p], w: CELL, h: CELL, initial: 0, size: 8,
         });
       }
-      L.tag(page, fonts, "партиция " + p, 56, ROW[p] + 11, C.ink2);
+      L.tag(page, fonts, T("партиция ", "partition ") + p, 56, ROW[p] + 11, C.ink2);
     }
 
     /* номера оффсетов — общая шапка над всеми тремя лентами */
@@ -102,7 +109,7 @@ module.exports = {
     L.tag(page, fonts, "offset", 56, 386);
 
     /* ---- счётчики: перекос должен быть виден числом ---- */
-    L.tag(page, fonts, "записей", CX, 386);
+    L.tag(page, fonts, T("записей", "records"), CX, 386);
     for (let p = 0; p < NPART; p++) {
       L.readout(ctx, page, "s2_n" + p, { x: CX, y: ROW[p] + 3, w: 76, h: 24 }, {
         text: "0", size: 13, mono: true, align: "center",
@@ -110,11 +117,11 @@ module.exports = {
     }
 
     /* ---- легенда: ключ, его хеш и куда он ведёт ---- */
-    L.tag(page, fonts, "ключ → партиция", LX, 386);
+    L.tag(page, fonts, T("ключ → партиция", "key → partition"), LX, 386);
     KEYDEF.forEach((k, j) => {
       const y = 368 - j * 26;
       page.drawRectangle({ x: LX, y, width: 11, height: 11, color: KEYS[k.color] });
-      page.drawText(k.name + " → партиция " + k.part, {
+      page.drawText(k.name + T(" → партиция ", " → partition ") + k.part, {
         x: LX + 17, y: y + 1.5, size: 8.5, font: fonts.mono, color: C.ink,
       });
       page.drawText("crc32 " + k.hash + " % 3 = " + k.part, {
@@ -122,14 +129,15 @@ module.exports = {
       });
     });
     page.drawRectangle({ x: LX, y: 290, width: 11, height: 11, color: C.faint });
-    page.drawText("? — без ключа, по кругу", {
+    page.drawText(T("? — без ключа, по кругу", "? — no key, round-robin"), {
       x: LX + 17, y: 291.5, size: 8.5, font: fonts.mono, color: C.muted,
     });
 
     /* ---- живая формула ---- */
-    L.tag(page, fonts, "как выбрана партиция", X0, 252);
+    L.tag(page, fonts, T("как выбрана партиция", "how the partition was picked"), X0, 252);
     L.readout(ctx, page, "s2_calc", { x: X0, y: 222, w: PAGE.w - 112 - (X0 - 56), h: 26 }, {
-      text: "hash(ключ) % 3 = номер партиции", size: 11, mono: true,
+      text: T("hash(ключ) % 3 = номер партиции", "hash(key) % 3 = partition number"),
+      size: 11, mono: true,
     });
 
     /* ---- кнопки ---- */
@@ -138,19 +146,25 @@ module.exports = {
       L.action(ctx, page, "s2_k" + j, k.name, { x: X0 + j * 98, y: BY, w: 92, h: 30 },
         "s2_key(" + j + ");", { fill: KEYS[k.color], border: KEYS[k.color], textColor: C.white });
     });
-    L.action(ctx, page, "s2_nokey", "без ключа", { x: X0 + 294, y: BY, w: 100, h: 30 },
+    L.action(ctx, page, "s2_nokey", T("без ключа", "no key"), { x: X0 + 294, y: BY, w: 100, h: 30 },
       "s2_nokey();", { fill: C.faint, border: C.faint, textColor: C.white });
-    L.action(ctx, page, "s2_hot", "Перекос: 6 раз " + KEYDEF[HOT].name, { x: X0 + 402, y: BY, w: 172, h: 30 },
+    L.action(ctx, page, "s2_hot",
+      T("Перекос: 6 раз " + KEYDEF[HOT].name, "Skew: " + KEYDEF[HOT].name + " six times"),
+      { x: X0 + 402, y: BY, w: 172, h: 30 },
       "s2_hot();", { fill: C.bad, border: C.bad, textColor: C.white });
-    L.action(ctx, page, "s2_reset", "Сброс", { x: X0 + 582, y: BY, w: 76, h: 30 },
+    L.action(ctx, page, "s2_reset", T("Сброс", "Reset"), { x: X0 + 582, y: BY, w: 76, h: 30 },
       "s2_reset();");
 
     L.readout(ctx, page, "s2_say", { x: X0, y: 120, w: PAGE.w - 112 - (X0 - 56), h: 34 }, {
-      text: "Демонстрация идёт сама — нажми любую кнопку, чтобы взять управление",
+      text: T("Демонстрация идёт сама — нажми любую кнопку, чтобы взять управление",
+        "The demo runs by itself — press any button to take over"),
       size: 10.5,
     });
 
-    L.wrapText(page, "Хеш берётся от байтов ключа: пока число партиций не меняется, ключ всегда приводит в одну и ту же партицию. Добавили партиций — делитель другой, тот же ключ уезжает в другую ленту, а записанное раньше остаётся на старом месте. Разные ключи могут съехаться в одну партицию: хеш обещает стабильность адреса, а не разные адреса. Запись без ключа продюсер раскладывает сам — здесь по кругу, в нынешней Kafka «липкими» пачками. Хеш у Kafka — murmur2, здесь для наглядности crc32: арифметика та же.", {
+    L.wrapText(page, T(
+      "Хеш берётся от байтов ключа: пока число партиций не меняется, ключ всегда приводит в одну и ту же партицию. Добавили партиций — делитель другой, тот же ключ уезжает в другую ленту, а записанное раньше остаётся на старом месте. Разные ключи могут съехаться в одну партицию: хеш обещает стабильность адреса, а не разные адреса. Запись без ключа продюсер раскладывает сам — здесь по кругу, в нынешней Kafka «липкими» пачками. Хеш у Kafka — murmur2, здесь для наглядности crc32: арифметика та же.",
+      "The hash is taken over the bytes of the key: as long as the partition count stays the same, a key always leads to the same partition. Add partitions and the divisor changes — the same key moves to another lane, while everything written earlier stays where it was. Different keys can land in one partition: the hash promises a stable address, not a distinct one. With no key the producer itself places the record — round-robin here, “sticky” batches in today’s Kafka. Kafka’s hash is murmur2, here it’s crc32 for clarity: the arithmetic is the same."
+    ), {
       x: X0, y: 100, width: PAGE.w - 112 - (X0 - 56), size: 9,
       font: fonts.sans, color: C.faint, leading: 12,
     });
@@ -183,7 +197,7 @@ function s2_put(p, st) {
 
 function s2_formula(j) {
   var p = s2_P[j];
-  txt("s2_calc", "hash(«" + s2_NAME[j] + "») = " + s2_HASH[j] + "   →   " + s2_HASH[j] + " % 3 = " + p + "   →   партиция " + p);
+  txt("s2_calc", ${J("hash(«", "hash(“")} + s2_NAME[j] + ${J("») = ", "”) = ")} + s2_HASH[j] + "   →   " + s2_HASH[j] + " % 3 = " + p + ${J("   →   партиция ", "   →   partition ")} + p);
 }
 
 function s2_key(j) {
@@ -191,11 +205,13 @@ function s2_key(j) {
   var p = s2_P[j];
   s2_formula(j);
   if (!s2_put(p, s2_ST[p][j])) {
-    txt("s2_say", "Партиция " + p + " заполнена до края стенда. Другой партиции этому ключу не достанется — жми «Сброс».");
+    txt("s2_say", ${J("Партиция ", "Partition ")} + p + ${J(
+      " заполнена до края стенда. Другой партиции этому ключу не достанется — жми «Сброс».",
+      " is full to the edge of the demo. This key gets no other partition — press “Reset”.")});
     return;
   }
   s2_stats();
-  txt("s2_say", "Ключ тот же — партиция та же: события " + s2_NAME[j] + " всегда ложатся в партицию " + p + ", и порядок Kafka обещает только внутри неё.");
+  txt("s2_say", ${J("Ключ тот же — партиция та же: события ", "Same key, same partition: ")} + s2_NAME[j] + ${J(" всегда ложатся в партицию ", " events always land in partition ")} + p + ${J(", и порядок Kafka обещает только внутри неё.", ", and Kafka promises order only inside it.")});
 }
 
 function s2_nokey() {
@@ -204,13 +220,14 @@ function s2_nokey() {
   var tries = 0;
   while (tries < s2_NP && s2_cnt[p] >= s2_N) { s2_rr++; p = s2_rr % s2_NP; tries++; }
   if (!s2_put(p, s2_NOK[p])) {
-    txt("s2_say", "Свободных клеток не осталось ни в одной партиции. Жми «Сброс».");
+    txt("s2_say", ${J("Свободных клеток не осталось ни в одной партиции. Жми «Сброс».",
+      "No free cells left in any partition. Press “Reset”.")});
     return;
   }
   s2_rr++;
-  txt("s2_calc", "ключа нет   →   round-robin   →   партиция " + p);
+  txt("s2_calc", ${J("ключа нет   →   round-robin   →   партиция ", "no key   →   round-robin   →   partition ")} + p);
   s2_stats();
-  txt("s2_say", "Ключа нет — запись ушла по кругу в партицию " + p + ". Нагрузка ровная, но порядок между партициями не гарантирован.");
+  txt("s2_say", ${J("Ключа нет — запись ушла по кругу в партицию ", "No key — the record went round-robin into partition ")} + p + ${J(". Нагрузка ровная, но порядок между партициями не гарантирован.", ". Load is even, but order across partitions is not guaranteed.")});
 }
 
 function s2_clear() {
@@ -235,10 +252,10 @@ function s2_hot() {
   var other = "";
   for (var q = 0; q < s2_NP; q++) {
     if (q === p) continue;
-    if (other !== "") other = other + " и ";
+    if (other !== "") other = other + ${J(" и ", " and ")};
     other = other + s2_cnt[q];
   }
-  txt("s2_say", "Перекос: с чистых лент шесть раз " + s2_NAME[j] + " — все шесть в партиции " + p + ", в других " + other + ". Ключ задаёт партицию жёстко.");
+  txt("s2_say", ${J("Перекос: с чистых лент шесть раз ", "Skew: from empty lanes, six times ")} + s2_NAME[j] + ${J(" — все шесть в партиции ", " — all six in partition ")} + p + ${J(", в других ", ", the others hold ")} + other + ${J(". Ключ задаёт партицию жёстко.", ". The key pins the partition.")});
 }
 
 function s2_reset() {
@@ -247,8 +264,9 @@ function s2_reset() {
   s2_tick = 0;
   s2_full = 0;
   s2_stats();
-  txt("s2_calc", "hash(ключ) % 3 = номер партиции");
-  txt("s2_say", "Партиции пусты. Жми ключи: один и тот же ключ всегда приводит в одну и ту же партицию.");
+  txt("s2_calc", ${J("hash(ключ) % 3 = номер партиции", "hash(key) % 3 = partition number")});
+  txt("s2_say", ${J("Партиции пусты. Жми ключи: один и тот же ключ всегда приводит в одну и ту же партицию.",
+    "Partitions are empty. Press the keys: the same key always leads to the same partition.")});
 }
 
 function s2_auto() {
@@ -260,13 +278,14 @@ function s2_auto() {
   if (s2_put(p, s2_ST[p][j])) {
     s2_full = 0;
     s2_stats();
-    txt("s2_say", "Показ: " + s2_NAME[j] + " уходит в партицию " + p + " — ключ тот же, значит и партиция та же.");
+    txt("s2_say", ${J("Показ: ", "Demo: ")} + s2_NAME[j] + ${J(" уходит в партицию ", " goes to partition ")} + p + ${J(" — ключ тот же, значит и партиция та же.", " — same key, so the same partition.")});
   } else {
     s2_full++;
   }
   if (s2_full >= s2_NP || s2_tick >= 21) {
     s2_manual = true;
-    txt("s2_say", "Показ окончен. Жми «Сброс» и пробуй сам — кнопки настоящие.");
+    txt("s2_say", ${J("Показ окончен. Жми «Сброс» и пробуй сам — кнопки настоящие.",
+      "Demo over. Press “Reset” and try it yourself — the buttons are real.")});
   }
 }
 

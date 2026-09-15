@@ -11,13 +11,69 @@
   var KV = {};
   global.KV = KV;
 
+  /* ---------------- язык ----------------
+     Страница двуязычная. Переключатель мгновенный, без перезагрузки,
+     поэтому строки НЕ фиксируются на момент загрузки: L(ru, en) читает
+     текущий язык в момент вызова, а build() главы перевызывается при
+     каждой смене языка — значит внутри build достаточно L().
+
+     Метаданные главы (group/nav/title/lede) читаются ВНЕ build, один раз
+     при регистрации, поэтому L() там бесполезен: язык бы застыл. Их пишут
+     парой — nav: ["Лог, а не очередь", "A log, not a queue"] — и достают
+     через KV.text(). */
+
+  var LANGS = ["ru", "en"];
+
+  function readLang() {
+    var m = /[?&]lang=(ru|en)\b/.exec(global.location.search || "");
+    if (m) return m[1];
+    try {
+      var saved = localStorage.getItem("kv-lang");
+      if (LANGS.indexOf(saved) >= 0) return saved;
+    } catch (e) { /* приватное окно */ }
+    var nav = (global.navigator && (global.navigator.language || global.navigator.userLanguage)) || "";
+    return /^ru/i.test(nav) ? "ru" : "en";
+  }
+
+  KV.langs = LANGS;
+  KV.lang = readLang();
+  document.documentElement.setAttribute("lang", KV.lang);
+
+  /** Строка на текущем языке. Основной способ внутри build() главы. */
+  KV.L = function (ru, en) { return KV.lang === "en" && en !== undefined ? en : ru; };
+  /* Короткое имя: в сценах вызов встречается сотнями раз, и «L(» на месте
+     открывающей кавычки оставляет строки читаемыми. */
+  global.L = KV.L;
+
+  /** Значение, записанное парой ["ru","en"] или {ru,en}. Строку отдаёт как есть. */
+  KV.text = function (v) {
+    if (Array.isArray(v)) return KV.lang === "en" && v[1] !== undefined ? v[1] : v[0];
+    if (v && typeof v === "object" && (v.ru !== undefined || v.en !== undefined)) {
+      return v[KV.lang] !== undefined ? v[KV.lang] : (v.ru !== undefined ? v.ru : v.en);
+    }
+    return v;
+  };
+
+  var langListeners = [];
+  KV.onLang = function (fn) { langListeners.push(fn); };
+  KV.setLang = function (lang) {
+    if (LANGS.indexOf(lang) < 0 || lang === KV.lang) return;
+    KV.lang = lang;
+    document.documentElement.setAttribute("lang", lang);
+    try { localStorage.setItem("kv-lang", lang); } catch (e) { /* приватное окно */ }
+    hideTip();   // открытая подсказка принадлежит прежнему языку
+    langListeners.forEach(function (fn) { try { fn(lang); } catch (e) { /* ignore */ } });
+  };
+
   /* ---------------- реестр глав ---------------- */
   KV.scenes = [];
 
   /**
    * Зарегистрировать главу.
-   * @param {{id:string, num:number, group:string, nav:string,
-   *          title:string, lede:string,
+   * Четыре текстовых поля метаданных пишутся парой ["ru", "en"] — они
+   * читаются вне build(), и L() там застыл бы на языке загрузки.
+   * @param {{id:string, num:number, group:Array, nav:Array,
+   *          title:Array, lede:Array,
    *          build:function(HTMLElement, object):void}} def
    *  build(root, api) — root это пустой контейнер главы; сцена сама
    *  добавляет в него прозу, стенды и вынос.
@@ -162,8 +218,16 @@
     },
     pick: function (arr, rnd) { return arr[Math.floor((rnd ? rnd() : Math.random()) * arr.length)]; },
     /** «12» -> «12», 1200 -> «1 200» */
-    num: function (n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " "); },
+    num: function (n) {
+      return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, KV.lang === "en" ? "," : " ");
+    },
+    /** Форма слова по числу. Три формы — русские; английскому нужны две,
+     *  поэтому там берём one при 1 и many во всех остальных случаях: few —
+     *  это «2,3,4», правило чужого языка, и на 21 оно бы соврало.
+     *  Сцены передают формы через L(): plural(n, L("файл","file"),
+     *  L("файла","files"), L("файлов","files")). */
     plural: function (n, one, few, many) {
+      if (KV.lang === "en") return n === 1 ? one : (many !== undefined ? many : few);
       var m10 = n % 10, m100 = n % 100;
       if (m10 === 1 && m100 !== 11) return one;
       if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
@@ -210,7 +274,9 @@
 
   /* ---------------- глоссарий и подсказки ---------------- */
 
-  KV.glossary = {
+  KV.glossaries = {};
+
+  KV.glossaries.ru = {
     "лог": "Append-only log — файл, в который можно только дописывать в конец. Ничего не стирается и не вставляется в середину.",
     "топик": "Именованный поток сообщений одного типа: orders, payments, user-clicks. Логическая единица; физически состоит из партиций.",
     "партиция": "Один независимый лог внутри топика. Единица параллелизма: сколько партиций — столько параллельных потоков записи и чтения.",
@@ -242,6 +308,46 @@
     "__consumer_offsets": "Служебный топик самой Kafka, где хранятся committed offsets всех групп."
   };
 
+  /* Английский словарь — не подстрочник: термины те же, но определения
+     написаны так, как их произносят по-английски. Ключи здесь тоже
+     английские, потому что [[term]] в английском тексте пишут по-английски. */
+  KV.glossaries.en = {
+    "log": "An append-only log — a file you can only add to at the end. Nothing is erased and nothing is inserted in the middle.",
+    "topic": "A named stream of messages of one kind: orders, payments, user-clicks. A logical unit; physically it is made of partitions.",
+    "partition": "One independent log inside a topic. The unit of parallelism: as many partitions, as many parallel streams of writing and reading.",
+    "offset": "The sequential number of a record WITHIN its partition: 0, 1, 2… Unique only inside that partition, and never changes.",
+    "broker": "One Kafka server. A cluster is several brokers with the partitions spread across them.",
+    "producer": "Whoever writes to a topic. A role, not a kind of service — one service often both writes and reads.",
+    "consumer": "Whoever reads from a topic. Remembers its own position (offset) — “dumb broker, smart consumer”.",
+    "key": "The message key. It picks the partition: hash(key) % number of partitions. Same key → always the same partition → order.",
+    "consumer group": "Several copies of one service reading a topic together. Kafka hands the partitions out among the members; a partition is read by at most one consumer in the group.",
+    "rebalance": "Reassigning partitions among group members when someone leaves or joins. With the classic (eager) strategy ALL consumption in the group stops while it happens: every partition is revoked and handed out again. The cooperative-sticky strategy revokes only the partitions that actually move; the rest keep being read.",
+    "committed offset": "How far the group has read. Stored in Kafka itself, in the internal __consumer_offsets topic. It is the number of the NEXT message to read, not of the last one processed.",
+    "LEO": "Log-end offset — the number the next record written to the partition will get. The end of the log.",
+    "lag": "How far behind you are: LEO minus committed offset. How many messages the consumer has not read yet. The main health metric.",
+    "commit": "The act of “remember that I have read up to here”. Either automatic (on a timer) or manual (after processing).",
+    "retention": "The storage rule: by time (retention.ms) or by size (retention.bytes). Deletion does NOT depend on whether anyone has read the data.",
+    "compaction": "Compaction keeps only the last value for each key. The topic turns from a history of changes into a snapshot of state.",
+    "tombstone": "A record with a key and a null value. It tells compaction to delete every record with that key.",
+    "replication": "Keeping a partition as several copies on different brokers. The replication factor is how many copies; usually 3.",
+    "leader": "The copy of a partition all writes and reads go through. The other copies (followers) replay it.",
+    "ISR": "In-Sync Replicas — the list of replicas keeping up with the leader. Fall too far behind and you are dropped from the ISR; catch up and you return.",
+    "acks": "How many acknowledgements the producer waits for: 0 (none), 1 (the leader), all (every replica in the current ISR).",
+    "min.insync.replicas": "The minimum number of in-sync replicas at which a write is accepted at all. With factor 3 you set 2. Without it acks=all is deceptive.",
+    "idempotency": "“Repeat it as many times as you like — the result is the same”. The handler checks the unique id of the message and skips the ones it has already processed.",
+    "at-least-once": "The baseline guarantee: the message will certainly be delivered, but it may arrive twice. Hence the requirement to be idempotent.",
+    "exactly-once": "Exactly once. In Kafka it works inside the Kafka → Kafka loop (idempotent producer + transactions). For an external database you still need idempotency on your side.",
+    "hot key": "Skew: if most events carry the same key, they all land in one partition. It is overloaded while the rest idle.",
+    "max.poll.interval.ms": "The interval within which a consumer must come back for the next batch. Miss it and Kafka counts it as dead and starts a rebalance.",
+    "round-robin": "Spreading records around the ring. The partition for a record without a key is picked by the PRODUCER, not the broker, and since Kafka 2.4 (KIP-480) it is picked “stickily”: one partition is filled until the batch closes, and only then the next one is taken (since 3.3 this is the built-in behaviour, KIP-794, and DefaultPartitioner and UniformStickyPartitioner are deprecated). It evens out across batches, not across messages; and without a key there is no order between partitions either way.",
+    "__consumer_offsets": "Kafka's own internal topic, where the committed offsets of every group are stored."
+  };
+
+  /* KV.glossary всегда указывает на словарь текущего языка: главе 15 и
+     подсказкам про переключение знать незачем. */
+  Object.defineProperty(KV, "glossary", {
+    get: function () { return KV.glossaries[KV.lang] || KV.glossaries.ru; }
+  });
   var tipEl = null;
   var tipFor = null;        // термин, к которому сейчас привязана подсказка
   var TIP_ID = "kv-tip";
@@ -255,6 +361,11 @@
   function showTip(target) {
     var term = target.getAttribute("data-term");
     var text = KV.glossary[term];
+    // Термин, написанный на другом языке, лучше объяснить чужим словарём,
+    // чем промолчать: подчёркнутое слово без подсказки выглядит поломкой.
+    if (!text) {
+      LANGS.forEach(function (l) { if (!text) text = KV.glossaries[l][term]; });
+    }
     if (!text) return;
     var t = ensureTip();
     if (tipFor && tipFor !== target) tipFor.removeAttribute("aria-describedby");
@@ -345,7 +456,7 @@
    */
   ui.stage = function (opts) {
     opts = opts || {};
-    var title = el("div.kv-stage__title", { text: opts.title || "Стенд" });
+    var title = el("div.kv-stage__title", { text: opts.title || KV.L("Стенд", "Demo") });
     var hint = el("div.kv-stage__hint", { text: opts.hint || "" });
     var head = el("div.kv-stage__head", null, title, hint);
     var body = el("div.kv-stage__body");
@@ -552,7 +663,7 @@
   /** Вынос главы: список «что запомнить». Поддерживает [[термин]]. */
   ui.takeaway = function (items) {
     return el("div.kv-takeaway", null,
-      el("div.kv-takeaway__t", { text: "Что запомнить" }),
+      el("div.kv-takeaway__t", { text: KV.L("Что запомнить", "What to remember") }),
       el("ul", null, items.map(function (i) { return el("li", { html: KV.terms(i) }); })));
   };
 
@@ -584,7 +695,7 @@
     var records = [];
     var markers = {};
     var track = el("div.kv-strip__track");
-    var empty = el("div.kv-strip__empty", { text: opts.empty || "лог пуст" });
+    var empty = el("div.kv-strip__empty", { text: opts.empty || KV.L("лог пуст", "the log is empty") });
     var strip = el("div.kv-strip", null, track, empty);
     var leoEl = null;
 
@@ -624,9 +735,10 @@
       // иначе в светлой теме контраст падает до 3:1 при кегле 10,5px.
       var ink = soft ? util.keyInk(rec.key) : (color ? util.ink(color) : null);
       var label = rec.label !== undefined ? rec.label : (rec.key ? util.shortKey(rec.key) : "");
+      var kw = KV.L("ключ", "key");
       var c = el("div.kv-cell", {
-        title: rec.title || (rec.key ? "ключ " + rec.key + " · offset " + off : "offset " + off),
-        "aria-label": (rec.key ? "ключ " + rec.key + ", " : "") + "offset " + off
+        title: rec.title || (rec.key ? kw + " " + rec.key + " · offset " + off : "offset " + off),
+        "aria-label": (rec.key ? kw + " " + rec.key + ", " : "") + "offset " + off
       }, String(label));
       if (color) {
         c.style.borderColor = color;

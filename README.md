@@ -1,4 +1,13 @@
-# Kafka на пальцах
+# Kafka на пальцах · Kafka hands-on
+
+**English.** Apache Kafka explained with demos you can click, not paragraphs you have to
+believe: a partition strip with real offsets, consumer bookmarks, a record flying from the
+producer, ISR, lag, rebalances. Fifteen chapters, no build step, no dependencies.
+The page is bilingual — pick **RU** or **EN** in the top-left corner; it also follows your
+browser's language on the first visit, and `?lang=en` pins it in a link.
+→ [open the page](https://warhammer2000.github.io/kafka-na-palcah/)
+
+---
 
 Интерактивный разбор Apache Kafka: не текст про механику, а работающие стенды,
 на которых механику видно. Сделано в духе [tryrabbitmq.com](https://tryrabbitmq.com/) —
@@ -6,6 +15,9 @@
 
 Каждая глава — короткий текст плюс живой стенд: лента партиции с оффсетами,
 закладки консьюмеров, полёт записи от продюсера, ISR, lag, ребалансы.
+
+Страница двуязычная: переключатель **RU / EN** в шапке, при первом заходе язык
+берётся из браузера, а `?lang=ru` или `?lang=en` закрепляет его в ссылке.
 
 ## Как открыть
 
@@ -69,21 +81,32 @@ scenes/NN-*.js        по файлу на главу
 ```js
 (function () {
   "use strict";
-  var el = KV.el, ui = KV.ui, util = KV.util;
+  var el = KV.el, ui = KV.ui, util = KV.util, L = KV.L;
 
   KV.scene({
-    id: "my", num: 16, group: "Прод", nav: "Моя глава",
-    title: "Заголовок", lede: "Подводка.",
+    id: "my", num: 16,
+    /* Метаданные читаются вне build() — значит парой ["ru", "en"]. */
+    group: ["Прод", "Production"],
+    nav: ["Моя глава", "My chapter"],
+    title: ["Заголовок", "Heading"],
+    lede: ["Подводка.", "The lede."],
     build: function (root, api) {
-      root.appendChild(ui.prose("<p>Текст.</p>"));
-      var stage = ui.stage({ title: "Стенд" });
+      root.appendChild(ui.prose(L("<p>Текст.</p>", "<p>Text.</p>")));
+      var stage = ui.stage({ title: L("Стенд", "Demo") });
       // ...
       root.appendChild(stage.el);
-      root.appendChild(ui.takeaway(["Что запомнить."]));
+      root.appendChild(ui.takeaway(L(["Что запомнить."], ["What to remember."])));
     }
   });
 })();
 ```
+
+Всё, что видит читатель, идёт через `L("по-русски", "in English")`: функция читает
+язык в момент вызова, а глава перерисовывается целиком при переключении. Комментарии
+и имена остаются русскими — они не для читателя.
+
+У множественного числа три формы русских и две английских, поэтому каждую форму
+оборачивают отдельно: `util.plural(n, L("файл","file"), L("файла","files"), L("файлов","files"))`.
 
 Все таймеры — только через `api.interval` / `api.timeout` / `api.raf`:
 они автоматически останавливаются при уходе с главы.
@@ -92,4 +115,51 @@ scenes/NN-*.js        по файлу на главу
 сломается в одной из двух тем.
 
 Термины размечаются как `[[offset]]` или `[[offset|оффсет]]` — получится
-подсказка при наведении. Список терминов — в `KV.glossary` (`assets/core.js`).
+подсказка при наведении. Списки терминов — `KV.glossaries.ru` и `KV.glossaries.en`
+(`assets/core.js`); в русском тексте ставится русский ключ, в английском — английский.
+
+## Документы
+
+Готовые файлы лежат в `documents/` и качаются прямо со страницы:
+
+| Файл | Что это |
+|------|---------|
+| [kafka-hands-on-en.pdf](documents/kafka-hands-on-en.pdf) | интерактивный документ, английский — **его публикуют** |
+| [kafka-na-palcah-ru.pdf](documents/kafka-na-palcah-ru.pdf) | он же по-русски |
+| [kafka-carousel-en.pdf](documents/kafka-carousel-en.pdf) | карусель для ленты LinkedIn, английская |
+| [kafka-carousel-ru.pdf](documents/kafka-carousel-ru.pdf) | карусель по-русски |
+
+Прямые ссылки с Pages:
+`https://warhammer2000.github.io/kafka-na-palcah/documents/kafka-hands-on-en.pdf`
+
+Собираются они одним сборщиком: карусель для ленты и интерактивный документ,
+в котором стенды работают прямо внутри PDF (поля формы плюс документный
+JavaScript — ни HTML, ни CSS в PDF не существует).
+
+```bash
+cd pdf
+npm install
+node build.js           ../documents/kafka-hands-on-en.pdf      # английский, он и публикуется
+node build.js           ../documents/kafka-na-palcah-ru.pdf  ru # русский
+node build-carousel.js  ../documents/kafka-carousel-en.pdf     # карусель, английская
+node build-carousel.js  ../documents/kafka-carousel-ru.pdf  ru # карусель, русская
+node build-one.js stands/03-lag.js ../dist/probe.pdf      # один стенд, для отладки
+```
+
+Сборка сама сторожит четыре вещи и печатает жалобы: пропавшие глифы (в PT Sans, например,
+нет стрелки «→»), подписи, закрытые виджетами формы, подписи, вылезшие за поле
+страницы, и наезд подписей друг на друга в карусели. Два последних особенно важны при
+смене языка: координата у строки своя, а длина чужая.
+
+Пятый сторож запускается отдельно и отвечает на вопрос «не осталось ли русского
+в английской сборке» — он смотрит текст страниц, подписи виджетов И строки внутри
+документного скрипта, то есть все три пути, которыми текст попадает в PDF:
+
+```bash
+node --require ./check-language.js build.js ../dist/probe.pdf
+```
+
+Интерактив виден только в просмотрщике, который умеет исполнять PDF-скрипты: Chrome,
+Edge, Acrobat Reader. Просмотр на macOS, читалки телефонов и предпросмотр внутри
+соцсетей показывают статичную картинку — поэтому карусель собрана кадрами и вообще
+не содержит полей формы.

@@ -231,6 +231,22 @@ body {
   margin-top: 5px;
 }
 
+/* Язык и тема стоят одной строкой в шапке хребта. Переключатель языка —
+   тот же сегментированный контрол, что и в главах, только мельче: два
+   состояния, оба видны, текущее прижато. */
+.kv-rail__tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.kv-lang button {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  letter-spacing: .06em;
+  padding: 5px 8px;
+}
+
 .kv-nav {
   flex: 1;
   overflow-y: auto;
@@ -270,7 +286,10 @@ body {
   font-family: var(--f-display);
   font-size: 11px;
   font-weight: 600;
-  color: var(--faint);
+  /* Не --faint: на подложке хребта самый бледный токен даёт 4,08:1 при
+     кегле 11px, то есть номер главы не дотягивает до порога. Прошлый обход
+     контраста мерил только тело главы и это место не видел. */
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 .kv-nav__item[aria-current="true"] {
@@ -302,7 +321,9 @@ body {
   font-size: 11px;
   letter-spacing: .07em;
   text-transform: uppercase;
-  color: var(--faint);
+  /* Тот же случай, что у .kv-prose h4: крошка лежит прямо на --bg, а самый
+     бледный токен там даёт 4,16:1 — ниже порога для 11px. */
+  color: var(--muted);
   margin-right: auto;
   white-space: nowrap;
   overflow: hidden;
@@ -901,6 +922,23 @@ input[type="range"].kv-range::-moz-range-thumb {
   .kv-part { grid-template-columns: 1fr; gap: 2px; }
   .kv-part__label { text-align: left; padding-top: 0; }
   .kv-stage__body { padding: 16px 12px; }
+
+  /* Полоса управления давно переносит СВОИ элементы, но каждый из них сам
+     был одной нерушимой строкой: подпись + сегментированный переключатель,
+     кружок + имя узла, сообщение пустой ленты с nowrap. На 360 точках такая
+     строка вылезала за стенд — по-английски чаще, потому что слова длиннее
+     («inflow · processing» против «приток»), но и по-русски тоже.
+     Разрешаем перенос внутри самих групп: контрол уходит под свою подпись. */
+  .kv-ctl { flex-wrap: wrap; }
+  .kv-seg { flex-wrap: wrap; }
+  .kv-node { flex-wrap: wrap; }
+  .kv-strip__empty { white-space: normal; }
+
+  /* Кнопка и бейдж держат подпись в одну строку — на широком экране это
+     правильно, на 360 точках длинная подпись просто уезжает за стенд.
+     Отпускаем перенос и не даём вылезти за родителя. */
+  .kv-btn, .kv-badge { white-space: normal; max-width: 100%; }
+  .kv-btn { line-height: 1.25; text-align: left; }
 }
 
 @media (max-width: 480px) {

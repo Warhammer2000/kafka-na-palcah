@@ -1,11 +1,15 @@
 /* Сборка ОДНОГО стенда — для разработки и проверки в отрыве от остальных.
-   Запуск: node build-one.js stands/02-keys.js ../dist/probe-02.pdf */
+   Запуск: node build-one.js stands/02-keys.js ../dist/probe-02.pdf [ru] */
 
 const path = require("path");
 const L = require("./lib");
 
+/* Язык снимаем ДО подключения стенда: заголовки модуля читаются при require. */
+L.langFromArgv();
+
 const MOD = process.argv[2];
-const OUT = process.argv[3] || "../dist/one.pdf";
+const OUT = process.argv[3] && process.argv[3] !== "ru" && process.argv[3] !== "en"
+  ? process.argv[3] : "../dist/one.pdf";
 
 if (!MOD) {
   console.error("укажи модуль стенда: node build-one.js stands/02-keys.js out.pdf");
@@ -24,7 +28,8 @@ if (!MOD) {
   L.attachScript(ctx, "one", script + '\nkvStart(700);\n');
 
   const size = await L.save(ctx, OUT);
-  console.log("стенд «" + stand.title + "» собран: " + OUT + " — " + Math.round(size / 1024) + " КБ");
+  console.log("стенд «" + L.pick(stand.title) + "» (" + L.lang() + ") собран: " +
+    OUT + " — " + Math.round(size / 1024) + " КБ");
 })().catch((e) => {
   console.error("СБОРКА УПАЛА: " + e.message);
   process.exit(1);

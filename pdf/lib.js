@@ -53,6 +53,38 @@ const CELL = 30;
 const GAP = 4;
 const STEP = CELL + GAP;
 
+/* ---------------- язык документа ----------------
+   Документ собирается на ОДНОМ языке. Публикуется английский — его читают
+   в ленте; русский собирается тем же сборщиком и теми же стендами, чтобы
+   исходный разбор не остался только в истории git.
+   Двух языков внутри одного файла нет сознательно: PDF читают линейно, и
+   вторая колонка на чужом языке там только мешает.
+     node build.js ../dist/kafka-v-pdf.pdf          — английский (по умолчанию)
+     node build.js ../dist/kafka-v-pdf-ru.pdf ru    — русский */
+
+let LANG = String(process.env.KAFKA_LANG || "en").toLowerCase() === "ru" ? "ru" : "en";
+
+/** Переключить язык сборки. Вызывается ДО createDoc: метаданные документа
+ *  пишутся там же. */
+function setLang(l) { LANG = String(l).toLowerCase() === "ru" ? "ru" : "en"; }
+function lang() { return LANG; }
+
+/** Строка на языке сборки. Имя T, а не L: L в сборщиках занято самим lib. */
+function T(ru, en) { return LANG === "ru" ? ru : (en === undefined ? ru : en); }
+
+/** Значение, записанное парой ["ru","en"]; строку отдаёт как есть.
+ *  Нужна там, где текст объявлен НА УРОВНЕ МОДУЛЯ: стенды подключаются
+ *  раньше, чем разобраны аргументы командной строки, и T() в их заголовках
+ *  застыл бы на языке по умолчанию. Пара разбирается в момент отрисовки. */
+function pick(v) { return Array.isArray(v) ? T(v[0], v[1]) : v; }
+
+/** Снять язык из аргументов командной строки: «... out.pdf ru». */
+function langFromArgv(argv) {
+  const a = (argv || process.argv).slice(2).find((v) => v === "ru" || v === "en");
+  if (a) setLang(a);
+  return LANG;
+}
+
 /* ---------------- документ ---------------- */
 
 async function createDoc() {
@@ -71,10 +103,14 @@ async function createDoc() {
     monoBold: await doc.embedFont(fs.readFileSync(path.join(dir, "Mono-Bold.ttf")), { subset: false }),
   };
 
-  doc.setTitle("Kafka на пальцах — живые стенды в PDF");
+  doc.setTitle(T("Kafka на пальцах — живые стенды в PDF",
+    "Kafka hands-on — live demos inside a PDF"));
   doc.setAuthor("kafka-na-palcah");
-  doc.setSubject("Интерактивный разбор Apache Kafka внутри PDF-документа");
-  doc.setKeywords(["kafka", "pdf", "интерактив", "обучение"]);
+  doc.setSubject(T("Интерактивный разбор Apache Kafka внутри PDF-документа",
+    "An interactive walkthrough of Apache Kafka inside a PDF document"));
+  doc.setKeywords(T(["kafka", "pdf", "интерактив", "обучение"],
+    ["kafka", "pdf", "interactive", "learning"]));
+  doc.setLanguage(T("ru-RU", "en-US"));
 
   const fk = {
     sans: fontkit.create(fs.readFileSync(path.join(dir, "PTSans.ttf"))),
@@ -135,6 +171,7 @@ function checkCaption(ctx, font, text, where) {
    прямоугольники: ВСЕ позиции метки, включая скрытые на старте. */
 
 const OVERLAP = [];
+const BOUNDS = [];   // подписи, вылезшие за поле страницы
 const BOXES = [];    // непрозрачные виджеты
 const LABELS = [];   // подписи, нарисованные на самой странице
 let pageSeq = 0;
@@ -159,6 +196,13 @@ function noteLabel(ctx, page, text, o, where) {
     p: pageId(page), where, text: s,
     x: o.x, y: o.y - size * 0.22, w, h: size * 0.94,
   });
+  /* Подпись, вылезшая за карточку, — самый вероятный дефект при смене языка:
+     координата у строки своя, а длина чужая. Заголовок, набранный по-русски
+     впритык, по-английски молча уезжает под обрез. */
+  if (o.x < 40 || o.x + w > PAGE.w - 40 || o.y < 34 || o.y > PAGE.h - 40) {
+    BOUNDS.push(where + ": «" + s.slice(0, 34) + "» x " + Math.round(o.x) + ".." +
+      Math.round(o.x + w) + ", y " + Math.round(o.y) + " — за полем страницы");
+  }
 }
 
 function checkOverlaps() {
@@ -199,23 +243,32 @@ function addStand(ctx, opts) {
     color: C.surface, borderColor: C.line, borderWidth: 1,
   });
 
-  if (opts.eyebrow) {
-    page.drawText(opts.eyebrow.toUpperCase(), {
+  /* Заголовки стенда объявлены парой ["ru","en"] — разбираем здесь, а не
+     при подключении модуля: язык становится известен позже. */
+  const eyebrow = pick(opts.eyebrow);
+  const title = pick(opts.title);
+  const subtitle = pick(opts.subtitle);
+
+  if (eyebrow) {
+    page.drawText(eyebrow.toUpperCase(), {
       x: 56, y: PAGE.h - 74, size: 8.5, font: fonts.monoBold, color: C.write,
       characterSpacing: 1.4,
     });
   }
-  page.drawText(opts.title, {
+  page.drawText(title, {
     x: 56, y: PAGE.h - 104, size: 22, font: fonts.bold, color: C.ink,
   });
-  if (opts.subtitle) {
-    wrapText(page, opts.subtitle, {
+  if (subtitle) {
+    wrapText(page, subtitle, {
       x: 56, y: PAGE.h - 126, width: PAGE.w - 260, size: 10.5,
       font: fonts.sans, color: C.muted, leading: 14,
     });
   }
 
-  page.drawText("Ничего не двигается? Открой этот файл в Chrome, Edge или Acrobat Reader — в них PDF умеет исполнять скрипты.", {
+  page.drawText(T(
+    "Ничего не двигается? Открой этот файл в Chrome, Edge или Acrobat Reader — в них PDF умеет исполнять скрипты.",
+    "Nothing moving? Open this file in Chrome, Edge or Acrobat Reader — those run the scripts a PDF carries."
+  ), {
     x: 56, y: 44, size: 7.5, font: fonts.sans, color: C.faint,
   });
 
@@ -246,6 +299,30 @@ function wrapText(page, text, o) {
 }
 
 /* ---------------- примитивы интерфейса ---------------- */
+
+/** Ссылка-аннотация поверх области страницы.
+ *  Нарисованный адрес читатель на компьютере иначе перенабирает руками —
+ *  а весь смысл финальной страницы в том, чтобы он дошёл до сайта.
+ *  Рамку не рисуем: подложку и текст уже нарисовала сама страница. */
+function link(ctx, page, box, url) {
+  const annot = ctx.doc.context.register(ctx.doc.context.obj({
+    Type: PDFName.of("Annot"),
+    Subtype: PDFName.of("Link"),
+    Rect: [box.x, box.y, box.x + box.w, box.y + box.h],
+    Border: [0, 0, 0],
+    F: 4,                                   // Print — иначе ссылки нет на печати
+    A: ctx.doc.context.obj({
+      Type: PDFName.of("Action"),
+      S: PDFName.of("URI"),
+      URI: PDFString.of(url),
+    }),
+  }));
+  const key = PDFName.of("Annots");
+  const existing = page.node.Annots();
+  if (existing) existing.push(annot);
+  else page.node.set(key, ctx.doc.context.obj([annot]));
+  return annot;
+}
 
 /** Мелкая моноширинная подпись-ярлык. */
 function tag(page, fonts, text, x, y, color) {
@@ -462,6 +539,10 @@ async function save(ctx, out) {
     console.log("ПРОПАВШИЕ ГЛИФЫ (" + GLYPH_MISS.length + "):");
     GLYPH_MISS.forEach((m) => console.log("  " + m));
   }
+  if (BOUNDS.length) {
+    console.log("ПОДПИСИ ЗА ПОЛЕМ (" + BOUNDS.length + "):");
+    BOUNDS.forEach((m) => console.log("  " + m));
+  }
   const bytes = await ctx.doc.save({ updateFieldAppearances: false });
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, bytes);
@@ -469,9 +550,10 @@ async function save(ctx, out) {
 }
 
 module.exports = {
-  fit, guardPage, checkGlyphs, GLYPH_MISS, checkOverlaps, OVERLAP,
+  fit, guardPage, checkGlyphs, GLYPH_MISS, checkOverlaps, OVERLAP, BOUNDS,
   C, KEYS, PAGE, CELL, GAP, STEP,
-  createDoc, addStand, wrapText, tag,
+  T, pick, setLang, lang, langFromArgv,
+  createDoc, addStand, wrapText, tag, link,
   stack, hide, logCell, slider, readout, action,
   RUNTIME, attachScript, save,
 };
