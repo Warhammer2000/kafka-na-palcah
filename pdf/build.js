@@ -22,7 +22,7 @@ const STANDS = ["01-log", "02-keys", "03-lag", "04-acks"]
 
 function cover(ctx) {
   const { fonts } = ctx;
-  const page = ctx.doc.addPage([PAGE.w, PAGE.h]);
+  const page = L.guardPage(ctx, ctx.doc.addPage([PAGE.w, PAGE.h]), "обложка/финал");
   page.drawRectangle({ x: 0, y: 0, width: PAGE.w, height: PAGE.h, color: C.bg });
   page.drawRectangle({
     x: 28, y: 28, width: PAGE.w - 56, height: PAGE.h - 56,
@@ -59,14 +59,14 @@ function cover(ctx) {
   }
   page.drawText("append-only", { x: 610, y: 330, size: 8, font: fonts.mono, color: C.faint });
 
-  page.drawText("Листай дальше →", { x: 56, y: 60, size: 11, font: fonts.bold, color: C.write });
+  page.drawText("Листай дальше →", { x: 56, y: 60, size: 11, font: fonts.monoBold, color: C.write });
 }
 
 /* ---------------- финальная страница со ссылкой ---------------- */
 
 function outro(ctx) {
   const { fonts } = ctx;
-  const page = ctx.doc.addPage([PAGE.w, PAGE.h]);
+  const page = L.guardPage(ctx, ctx.doc.addPage([PAGE.w, PAGE.h]), "обложка/финал");
   page.drawRectangle({ x: 0, y: 0, width: PAGE.w, height: PAGE.h, color: C.bg });
   page.drawRectangle({
     x: 28, y: 28, width: PAGE.w - 56, height: PAGE.h - 56,

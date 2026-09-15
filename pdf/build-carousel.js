@@ -346,8 +346,8 @@ async function main() {
       y -= 100;
     });
     y -= 10;
-    s.page.drawText("одинаковый ключ  →  одна партиция  →  строгий порядок", {
-      x: x0, y, size: 26, font: F.bold, color: C.ink,
+    s.page.drawText("одинаковый ключ  →  одна партиция  →  порядок", {
+      x: x0, y, size: 24, font: F.monoBold, color: C.ink,
     });
     footnote(s.page, "Порядок гарантирован только внутри партиции. Между партициями порядка нет вообще — ни общего счётчика, ни общего времени.", C.write);
   }

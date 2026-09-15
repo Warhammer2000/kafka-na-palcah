@@ -76,13 +76,60 @@ async function createDoc() {
   doc.setSubject("Интерактивный разбор Apache Kafka внутри PDF-документа");
   doc.setKeywords(["kafka", "pdf", "интерактив", "обучение"]);
 
-  return { doc, form: doc.getForm(), fonts };
+  const fk = {
+    sans: fontkit.create(fs.readFileSync(path.join(dir, "PTSans.ttf"))),
+    bold: fontkit.create(fs.readFileSync(path.join(dir, "PTSans-Bold.ttf"))),
+    mono: fontkit.create(fs.readFileSync(path.join(dir, "Mono.ttf"))),
+    monoBold: fontkit.create(fs.readFileSync(path.join(dir, "Mono-Bold.ttf"))),
+  };
+
+  return { doc, form: doc.getForm(), fonts, fk };
+}
+
+/* ---------------- сторож глифов ----------------
+   Шрифт молча рисует пустоту вместо символа, которого в нём нет, —
+   ни ошибки при сборке, ни следа в файле. Живой пример: в PT Sans
+   НЕТ стрелки «→», она есть только в моноширинном. Поэтому каждую
+   строку проверяем по таблице символов того шрифта, которым её рисуют. */
+
+const GLYPH_MISS = [];
+
+function coverage(ctx, font) {
+  for (const name of Object.keys(ctx.fonts)) {
+    if (ctx.fonts[name] === font) return ctx.fk[name];
+  }
+  return null;
+}
+
+function checkGlyphs(ctx, font, text, where) {
+  const fk = coverage(ctx, font);
+  if (!fk) return;
+  const bad = [];
+  for (const ch of String(text)) {
+    const cp = ch.codePointAt(0);
+    if (cp === 10 || cp === 13 || cp === 32) continue;
+    if (!fk.hasGlyphForCodePoint(cp) && bad.indexOf(ch) < 0) bad.push(ch);
+  }
+  if (bad.length) {
+    GLYPH_MISS.push(where + ": в шрифте нет «" + bad.join(" ") + "» — текст «" +
+      String(text).slice(0, 40) + "»");
+  }
+}
+
+/** Обернуть страницу проверкой глифов. */
+function guardPage(ctx, page, where) {
+  const draw = page.drawText.bind(page);
+  page.drawText = (s, o) => {
+    checkGlyphs(ctx, o.font, s, where);
+    return draw(s, o);
+  };
+  return page;
 }
 
 /** Новая страница-стенд с заголовком и подвалом. */
 function addStand(ctx, opts) {
   const { doc, fonts } = ctx;
-  const page = doc.addPage([PAGE.w, PAGE.h]);
+  const page = guardPage(ctx, doc.addPage([PAGE.w, PAGE.h]), "стенд " + (opts.id || opts.title));
 
   page.drawRectangle({ x: 0, y: 0, width: PAGE.w, height: PAGE.h, color: C.bg });
   page.drawRectangle({
@@ -231,6 +278,8 @@ function readout(ctx, page, name, box, opts) {
   f.setFontSize(o.size || 10);
   f.updateAppearances(font);
   f.enableReadOnly();
+  if (!ctx.fieldFont) ctx.fieldFont = {};
+  ctx.fieldFont[name] = font;
   return f;
 }
 
@@ -290,8 +339,22 @@ function kvTick() {
 }
 `;
 
-/** Собрать и записать документный скрипт. */
+/** Собрать и записать документный скрипт.
+ *  Заодно проверяем строки, которые скрипт кладёт в поля: они появятся
+ *  уже у читателя, и символа, которого нет в шрифте ЭТОГО поля, никто
+ *  не заметит — поле просто нарисует пустоту. */
 function attachScript(ctx, name, body) {
+  const src = String(body);
+  const re = /txt\(\s*"([A-Za-z0-9_]+)"\s*,([\s\S]*?)\);/g;
+  let m;
+  while ((m = re.exec(src)) !== null) {
+    const font = ctx.fieldFont && ctx.fieldFont[m[1]];
+    if (!font) continue;
+    const literals = m[2].match(/"(?:[^"\\]|\\.)*"/g) || [];
+    literals.forEach((lit) => {
+      checkGlyphs(ctx, font, lit.slice(1, -1), 'скрипт, поле "' + m[1] + '"');
+    });
+  }
   ctx.doc.addJavaScript(name, RUNTIME + "\n" + body);
 }
 
@@ -303,6 +366,10 @@ async function save(ctx, out) {
   // Свой внешний вид каждому полю уже задан через fit() нужным шрифтом.
   // Автоматический проход pdf-lib пересобрал бы их стандартным Helvetica,
   // в котором нет кириллицы, — и сборка падает на первой же букве.
+  if (GLYPH_MISS.length) {
+    console.log("ПРОПАВШИЕ ГЛИФЫ (" + GLYPH_MISS.length + "):");
+    GLYPH_MISS.forEach((m) => console.log("  " + m));
+  }
   const bytes = await ctx.doc.save({ updateFieldAppearances: false });
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, bytes);
@@ -310,7 +377,7 @@ async function save(ctx, out) {
 }
 
 module.exports = {
-  fit,
+  fit, guardPage, checkGlyphs, GLYPH_MISS,
   C, KEYS, PAGE, CELL, GAP, STEP,
   createDoc, addStand, wrapText, tag,
   stack, hide, logCell, slider, readout, action,
