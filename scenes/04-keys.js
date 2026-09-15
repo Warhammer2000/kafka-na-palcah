@@ -43,7 +43,19 @@
           el("span", { style: { "font-family": "var(--f-mono)", "font-size": "11px", color: "var(--faint)" } },
             "→ топик orders")));
 
-      function rebuild(reason) {
+      /* Ключи для затравки: при открытии главы лента не должна быть пустой,
+         иначе главный урок — «разные ключи расходятся по партициям» —
+         не виден, пока не нажмёшь. */
+      var SEED = ["user-1", "user-7", "user-3", "user-7", "user-1", "user-42", "user-3"];
+
+      function seed() {
+        SEED.forEach(function (k) {
+          strips[util.partitionFor(k, N)].push({ key: k });
+        });
+        renderCounts();
+      }
+
+      function rebuild(reason, withSeed) {
         KV.clear(logWrap);
         strips = []; rr = 0;
         for (var i = 0; i < N; i++) {
@@ -53,7 +65,7 @@
             logWrap.appendChild(s.el);
           })(i);
         }
-        renderCounts();
+        if (withSeed) seed(); else renderCounts();
         if (reason) stage.say(reason);
       }
 
@@ -95,7 +107,7 @@
         var color = useKey ? util.keyColor(key) : "var(--muted)";
 
         KV.fly(producer, plate, {
-          label: useKey ? String(key).slice(0, 3) : "—",
+          label: useKey ? util.shortKey(key) : "—",
           color: color,
           soft: useKey ? util.keyColorSoft(key) : "var(--surface-2)",
           ms: api.reduced ? 0 : 380
@@ -120,7 +132,7 @@
       }
 
       var quick = el("div.kv-row");
-      ["user-1", "user-7", "user-42", "order-903"].forEach(function (k) {
+      ["user-1", "user-3", "user-7", "user-42"].forEach(function (k) {
         var b = ui.btn(k, function () { keyInput.value = k; send(k); }, { sm: true });
         b.style.fontFamily = "var(--f-mono)";
         b.style.color = util.keyColor(k);
@@ -152,7 +164,8 @@
         onInput: function (v) {
           N = v;
           rebuild("Партиций теперь " + N + ". Раскладка пересобрана с нуля: <b>тот же ключ уходит уже в другую партицию</b> — " +
-            "именно поэтому число партиций тяжело менять на живом топике, порядок нарушается.");
+            "именно поэтому число партиций тяжело менять на живом топике, порядок нарушается. " +
+            "Сравни, где лежали те же ключи секунду назад.", true);
         }
       });
 
@@ -170,7 +183,7 @@
         }, { sm: true, variant: "danger" }),
         keyToggle.el,
         nRange.el,
-        ui.btn("Очистить", function () { rebuild("Топик пуст."); }, { sm: true, variant: "ghost" }));
+        ui.btn("Очистить", function () { rebuild("Топик пуст. Отправляй ключи и смотри, куда они ложатся."); }, { sm: true, variant: "ghost" }));
 
       function showSkew() {
         api.timeout(420, function () {
@@ -181,7 +194,8 @@
         });
       }
 
-      rebuild("Отправь ключ и посмотри, куда он ляжет. Один и тот же ключ всегда попадает в одну партицию.");
+      rebuild("Так топик выглядит после семи записей. Разные ключи разошлись по разным партициям, " +
+        "а повторы одного ключа легли в свою: <b>user-1</b>, <b>user-7</b> и <b>user-3</b> отправлены дважды. Дальше отправляй сам.", true);
       root.appendChild(stage.el);
 
       /* ---------------- разбор ---------------- */

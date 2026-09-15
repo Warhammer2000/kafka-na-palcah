@@ -94,19 +94,38 @@
   var KEY_COLORS = ["--k0", "--k1", "--k2", "--k3", "--k4", "--k5"];
 
   var util = {
-    /** Детерминированный 32-битный хеш строки (как murmur-lite).
-     *  Именно его показываем в демо «hash(ключ) % партиций». */
+    /** Детерминированный 32-битный хеш строки (FNV-1a).
+     *  Именно его показываем в демо «hash(ключ) % партиций».
+     *
+     *  ВНИМАНИЕ на Math.imul. Записать умножение как (h * 16777619) >>> 0
+     *  нельзя: числа в JavaScript — это double, произведение доходит до
+     *  7e16 и вылезает за предел точной целочисленной арифметики (9e15).
+     *  Младшие биты округляются и обнуляются, а остаток от деления на
+     *  число партиций берётся ровно из них — в итоге почти всё сваливается
+     *  в партицию 0. Замерено на 2000 ключах по 4 партициям:
+     *  было 1742/36/168/54, стало 501/499/499/501.
+     *  Math.imul делает настоящее 32-битное умножение. */
     hash: function (str) {
       var h = 2166136261;
       str = String(str);
       for (var i = 0; i < str.length; i++) {
         h ^= str.charCodeAt(i);
-        h = (h * 16777619) >>> 0;
+        h = Math.imul(h, 16777619) >>> 0;
       }
       return h >>> 0;
     },
     /** Номер партиции для ключа: hash(key) % n */
     partitionFor: function (key, n) { return util.hash(key) % n; },
+    /** Короткая подпись ключа для клетки. Берём различающий хвост, а не
+     *  первые буквы: у user-1, user-7 и user-42 первые три символа
+     *  одинаковые («use»), и в ленте они выглядели бы одной записью. */
+    shortKey: function (key) {
+      var s = String(key);
+      var m = /(\d+)$/.exec(s);
+      if (m) return m[1].length > 4 ? m[1].slice(-4) : m[1];
+      var seg = s.split(/[-_.:/ ]/).pop() || s;
+      return seg.slice(0, 4);
+    },
     /** Стабильный индекс палитры (0..5) для ключа. */
     keyIndex: function (key) { return util.hash(key) % KEY_COLORS.length; },
     /** CSS-переменная цвета ключа: 'var(--k3)' */
@@ -505,7 +524,7 @@
     function cellEl(rec, off) {
       var color = rec.color || (rec.key ? util.keyColor(rec.key) : null);
       var soft = rec.key && !rec.color ? util.keyColorSoft(rec.key) : null;
-      var label = rec.label !== undefined ? rec.label : (rec.key ? String(rec.key).slice(0, 3) : "");
+      var label = rec.label !== undefined ? rec.label : (rec.key ? util.shortKey(rec.key) : "");
       var c = el("div.kv-cell", {
         title: rec.title || (rec.key ? "ключ " + rec.key + " · offset " + off : "offset " + off),
         "aria-label": (rec.key ? "ключ " + rec.key + ", " : "") + "offset " + off
