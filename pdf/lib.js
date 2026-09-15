@@ -279,6 +279,15 @@ function moveTo(base, pos, count) {
 }
 
 function txt(name, s) { var f = F(name); if (f) f.value = String(s); }
+
+/** Один таймер на весь документ: каждый стенд кладёт сюда свою функцию.
+ *  Несколько app.setInterval на документ работают нестабильно. */
+var TICKERS = [];
+function kvTick() {
+  for (var i = 0; i < TICKERS.length; i++) {
+    try { TICKERS[i](); } catch (e) { }
+  }
+}
 `;
 
 /** Собрать и записать документный скрипт. */
