@@ -366,7 +366,7 @@
         emptyMsg.classList.toggle("kv-hidden", shown > 0);
         gstage.say(shown === terms.length
           ? "Показаны все <b>" + terms.length + "</b> " + util.plural(terms.length, "термин", "термина", "терминов") +
-            " — ровно те, что подсвечены пунктиром в остальных главах."
+            " курса — тот самый список, из которого берутся подсказки под пунктирными словами в главах."
           : "Совпадений: <b>" + shown + "</b> из " + terms.length + ".");
       }
 

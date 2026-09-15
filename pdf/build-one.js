@@ -19,7 +19,9 @@ if (!MOD) {
   const page = L.addStand(ctx, stand);
   const script = stand.build(ctx, L, page);
 
-  L.attachScript(ctx, "one", script + '\napp.setInterval("kvTick()", 700);\n');
+  // kvStart, а не голый app.setInterval: ссылку на интервал нужно держать,
+  // иначе сборщик мусора Acrobat остановит анимацию.
+  L.attachScript(ctx, "one", script + '\nkvStart(700);\n');
 
   const size = await L.save(ctx, OUT);
   console.log("стенд «" + stand.title + "» собран: " + OUT + " — " + Math.round(size / 1024) + " КБ");

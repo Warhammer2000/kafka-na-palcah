@@ -97,19 +97,38 @@ function slide(opts) {
     x: W - M - PAD - 28, y: M + PAD - 14, size: 20, font: F.mono, color: C.faint,
   });
 
+  /* floor — общая отметка, с которой начинается содержимое. Нужна кадрам:
+     соседние слайды читаются как одно движение, только если лента стоит в
+     ОДНИХ И ТЕХ ЖЕ координатах. Без неё содержимое начинается сразу под
+     заголовком, а у кадров он разной высоты — и при пролистывании лента
+     прыгает на высоту строки вместо того, чтобы двигаться. */
+  if (opts.floor !== undefined) {
+    if (y - 20 < opts.floor) {
+      VIOL.push(`слайд ${slideNo}: заголовок дорос до общей отметки кадра (${Math.round(y - 20)} < ${opts.floor})`);
+    }
+    return { page, x, top: opts.floor };
+  }
+
   return { page, x, top: y - 20 };
 }
 
+/* Перенос по ширине, но АВТОРСКИЙ перенос («\n») сильнее: заголовки слайдов
+   разбиты по смыслу руками, и split(/\s+/) съедал «\n» как обычный пробел —
+   разбивка молча пропадала, заголовок ломался по ширине с висячим словом, а
+   кадр, потерявший вторую строку, съезжал вверх на всю её высоту. */
 function wrap(text, font, size, width) {
-  const words = String(text).split(/\s+/);
   const lines = [];
-  let line = "";
-  for (const w of words) {
-    const probe = line ? line + " " + w : w;
-    if (font.widthOfTextAtSize(probe, size) > width && line) { lines.push(line); line = w; }
-    else line = probe;
-  }
-  if (line) lines.push(line);
+  String(text).split("\n").forEach((para) => {
+    const words = para.split(/\s+/).filter(Boolean);
+    if (!words.length) return;
+    let line = "";
+    for (const w of words) {
+      const probe = line ? line + " " + w : w;
+      if (font.widthOfTextAtSize(probe, size) > width && line) { lines.push(line); line = w; }
+      else line = probe;
+    }
+    if (line) lines.push(line);
+  });
   return lines;
 }
 
@@ -190,7 +209,10 @@ function strip(page, top, st) {
   return by - 10;
 }
 
-function bookmark(page, x0, y, pos, letter, color) {
+/* note — необязательная приписка к подписи закладки («прочитал до сюда»).
+   Раньше её передавали седьмым аргументом функции с шестью параметрами:
+   JS молча выбрасывал лишний аргумент, и приписка не рисовалась никогда. */
+function bookmark(page, x0, y, pos, letter, color, note) {
   const x = x0 + pos * STEP;
   page.drawRectangle({ x, y, width: CELL, height: 34, color });
   const t = letter + pos;
@@ -198,7 +220,7 @@ function bookmark(page, x0, y, pos, letter, color) {
     x: x + (CELL - F.mono.widthOfTextAtSize(t, 20)) / 2,
     y: y + 9, size: 20, font: F.mono, color: C.white,
   });
-  const lbl = "группа " + letter;
+  const lbl = note ? "группа " + letter + " · " + note : "группа " + letter;
   const lw = F.mono.widthOfTextAtSize(lbl, 16);
   page.drawText(lbl, {
     x: Math.min(x + CELL + 14, CX + CW - lw),
@@ -282,22 +304,24 @@ async function main() {
         color: KEYS[SEQ[i].c], borderColor: KEYS[SEQ[i].c], borderWidth: 1.5,
       });
     }
-    bookmark(s.page, x0, y - 54, 3, "A", C.read, "прочитал до сюда");
+    bookmark(s.page, x0, y - 54, 3, "A", C.read, "прочитала до сюда");
 
     footnote(s.page, "Читатель двигает только свою закладку. Записи остаются на месте — поэтому их можно перечитать.", C.good);
   }
 
-  /* --- 03-06 кадры: лог наполняется --- */
+  /* --- 03-05 кадры: лог наполняется --- */
   const frames = [
     { written: 0, posA: 0, posB: 0, note: "Лог пуст. Обе группы стоят на offset 0 — читать ещё нечего." },
     { written: 4, posA: 2, posB: 1, note: "Продюсер дописал четыре записи. Группы читают в своём темпе и уже разъехались." },
     { written: 9, posA: 6, posB: 3, note: "Отставание видно глазом: у группы B накопилось шесть непрочитанных сообщений." },
   ];
+  const FRAME_TOP = 976;   // одна отметка на все три кадра, см. floor в slide()
   frames.forEach((f, i) => {
     const s = slide({
       eyebrow: "кадр " + (i + 1) + " из 3",
       title: i === 0 ? "Каждый читатель\nсо своей закладкой" : (i === 1 ? "Продюсер пишет\nв конец" : "Так выглядит lag"),
       lede: i === 2 ? "lag = конец лога минус позиция группы. Главная метрика здоровья: насколько устарели данные прямо сейчас." : "",
+      floor: FRAME_TOP,
     });
     const y = strip(s.page, s.top, f);
     stats(s.page, y, [
@@ -308,7 +332,7 @@ async function main() {
     footnote(s.page, f.note, i === 2 ? C.bad : C.write);
   });
 
-  /* --- 07 перемотка --- */
+  /* --- 06 перемотка --- */
   {
     const s = slide({
       eyebrow: "чего очередь не умеет",
@@ -319,7 +343,7 @@ async function main() {
     footnote(s.page, "Новый сервис подключается к работающему топику и вычитывает всё, что было до него. В очереди такой кнопки не существует.", C.read);
   }
 
-  /* --- 08 ключ решает партицию --- */
+  /* --- 07 ключ решает партицию --- */
   {
     const s = slide({
       eyebrow: "закон kafka",
@@ -352,12 +376,14 @@ async function main() {
     footnote(s.page, "Порядок гарантирован только внутри партиции. Между партициями порядка нет вообще — ни общего счётчика, ни общего времени.", C.write);
   }
 
-  /* --- 09 перекос ключа --- */
+  /* --- 08 перекос ключа --- */
   {
     const s = slide({
       eyebrow: "как это ломается",
       title: "Плохой ключ —\nи одна партиция горит",
-      lede: "Если девять из десяти событий идут с одним ключом, они лягут в одну партицию. Она перегружена, соседние простаивают.",
+      /* Число в тексте и число на картинке обязаны сходиться: ниже рисуется
+         восемь клеток в партиции 0 и по одной в соседних — итого десять. */
+      lede: "Если восемь из десяти событий идут с одним ключом, они лягут в одну партицию. Она перегружена, соседние простаивают.",
     });
     const x0 = CX;
     const c = 64, st = c + 8;
@@ -382,7 +408,7 @@ async function main() {
     footnote(s.page, "Добавить потребителей не поможет: одну партицию в группе читает ровно один из них. Потолок задан числом партиций.", C.bad);
   }
 
-  /* --- 10 acks --- */
+  /* --- 09 acks --- */
   {
     const s = slide({
       eyebrow: "самая дорогая ловушка",
@@ -408,7 +434,7 @@ async function main() {
     footnote(s.page, "Надёжная тройка, которую помнят как одно целое: replication.factor 3, acks=all, min.insync.replicas 2.", C.write);
   }
 
-  /* --- 11 финал со ссылкой --- */
+  /* --- 10 финал со ссылкой --- */
   {
     const s = slide({
       eyebrow: "а теперь самое странное",

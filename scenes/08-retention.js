@@ -454,6 +454,14 @@
 
       /* ================= старт ================= */
 
+      /** Словами — правило, которое действует прямо сейчас. */
+      function ruleText() {
+        return mode === "time"
+          ? "не старше " + retDays + " " + dayGen(retDays)
+          : "не больше " + limit + " " + recGen(limit);
+      }
+
+      /** @returns {number} сколько записей правило накрыло сразу после посева */
       function seed() {
         pendingDrop = null;
         rnd = util.rng(SEED);
@@ -468,6 +476,10 @@
         fast = leo();
 
         refreshCells();
+        /* Чистильщик смотрит на лог всегда, а не только по кнопке «сутки»:
+           иначе после сброса стенд показывал бы лог, который сам же нарушает
+           действующее правило, и ничего бы не удалял. */
+        var doomed = evaluate();
         paintMarkers();
         updateStats();
 
@@ -480,8 +492,14 @@
         say("Лог живёт седьмые сутки. Цифра в клетке — <b>возраст записи в днях</b>. " +
           "Группа <b>reports</b> успевает и стоит в конце; группа <b>slow-consumer</b> ползёт по одной записи в сутки " +
           "и уже отстала на " + (leo() - slow) + " " + msgWord(leo() - slow) + ". " +
+          (doomed
+            ? "Действующее правило (" + ruleText() + ") накрыло сразу " + doomed + " " + recWord(doomed) +
+              " — они выцвели и сейчас уедут из лога. "
+            : "") +
           "Мотай сутки: продюсер дописывает, чистильщик сносит старое — " +
           "и смотри, кто кого обгонит.");
+
+        return doomed;
       }
 
       /* --- сборка стенда --- */
@@ -497,7 +515,7 @@
       stage.body.appendChild(statsRow);
       stage.body.appendChild(el("div", { style: { "margin-top": "12px" } },
         ui.legend([
-          { color: "var(--k0)", label: "запись · цифра = возраст в днях" },
+          { color: "var(--k0)", label: "запись · цвет — по ключу события, цифра = возраст в днях" },
           { color: "var(--faint)", label: "выцвела = просрочена, сейчас уедет" },
           { color: "var(--read)", label: "закладка reports" },
           { color: "var(--k3)", label: "закладка slow-consumer" }
@@ -515,8 +533,12 @@
         ui.btn("Догнать", catchUp, { sm: true, variant: "read" }),
         ui.btn("Перемотать в начало", rewind, { sm: true }),
         ui.btn("Сбросить", function () {
-          seed();
-          say("Стенд собран заново: день 6, семь суток истории, offsets с " + START + ".");
+          var n = seed();
+          say("Стенд собран заново: день 6, семь суток истории, offsets с " + START + ". " +
+            (n
+              ? "Правило осталось прежним (" + ruleText() + ") и сразу накрыло " + n + " " + recWord(n) +
+                " — они выцвели и уезжают."
+              : "По действующему правилу (" + ruleText() + ") сносить пока нечего."));
         }, { sm: true, variant: "ghost" }));
 
       syncMode();

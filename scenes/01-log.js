@@ -50,6 +50,7 @@
       /* --- правая колонка: лог --- */
       var log = ui.logStrip({ empty: "лог пуст" });
       var posA = 0, posB = 0;
+      var qGot = { A: 0, B: 0 };   // кому сколько досталось из очереди
 
       function paintMarkers() {
         log.marker("A", { at: posA, label: "A " + posA, color: "var(--read)" });
@@ -58,6 +59,7 @@
 
       function reset() {
         queue = SEED.slice();
+        qGot.A = 0; qGot.B = 0;
         renderQueue();
         log.setRecords(SEED.map(function (k) { return { key: k }; }));
         posA = 0; posB = 0;
@@ -69,10 +71,19 @@
 
       function queueRead(who) {
         if (!queue.length) {
-          stage.say("<b>Очередь пуста.</b> Сообщения удалены при доставке — перечитать нечего, и второму читателю тоже ничего не досталось.");
+          /* Итог считаем из фактической раздачи, а не заготовленной фразой:
+             второй читатель мог вычерпать половину очереди сам. */
+          var total = qGot.A + qGot.B;
+          var other = who === "A" ? "B" : "A";
+          stage.say("<b>Очередь пуста.</b> Все " + total + " " +
+            util.plural(total, "сообщение", "сообщения", "сообщений") + " уже доставлены и удалены: " +
+            "читателю A — " + qGot.A + ", читателю B — " + qGot.B + ". " +
+            "Каждое досталось <b>ровно одному</b> — ни перечитать его, ни отдать читателю " + other +
+            " брокер уже не может.");
           return;
         }
         var r = queue.shift();
+        qGot[who]++;
         renderQueue();
         stage.say("<b>Очередь:</b> «" + util.escape(r) + "» доставлено читателю " + who +
           " и <b>удалено</b>. Осталось " + queue.length + ". Брокер помнит, что доставлено — читатель не помнит ничего.");

@@ -132,6 +132,21 @@
     keyColor: function (key) { return "var(" + KEY_COLORS[util.keyIndex(key)] + ")"; },
     /** Бледная заливка того же ключа: 'var(--k3-soft)' */
     keyColorSoft: function (key) { return "var(" + KEY_COLORS[util.keyIndex(key)] + "-soft)"; },
+    /** Цвет ПОДПИСИ ключа на его же бледной заливке.
+     *  Чистый токен там не проходит по контрасту: в светлой теме пары
+     *  --kN на --kN-soft дают 3,00–3,95:1, а подпись в клетке — 10,5px,
+     *  то есть порог 4,5:1. Подмешиваем 30 % --ink: замер на живых
+     *  токенах даёт 4,90–5,94:1 в светлой теме и 7,02–7,54:1 в тёмной,
+     *  оттенок остаётся узнаваемым, а рамка клетки красится чистым токеном.
+     *  Литералов нет — только токены; если браузер не знает color-mix,
+     *  подпись просто наследует --ink-2 из .kv-cell и остаётся читаемой. */
+    keyInk: function (key) { return util.ink(util.keyColor(key)); },
+    /** Тот же приём для ЛЮБОГО цвета, заданного сценой вручную.
+     *  Сцены передают в клетку color: "var(--write)" и подобное; чистый
+     *  сигнальный токен как цвет ТЕКСТА в светлой теме даёт около 3:1 при
+     *  кегле 10,5px. Подмешиваем 30 % --ink: в светлой теме тон темнеет,
+     *  в тёмной светлеет — то есть контраст растёт в обеих. */
+    ink: function (color) { return "color-mix(in srgb, " + color + " 70%, var(--ink))"; },
     /** Цвет палитры по индексу (для групп, консьюмеров и т.п.) */
     paletteColor: function (i) { return "var(" + KEY_COLORS[((i % 6) + 6) % 6] + ")"; },
     clamp: function (v, a, b) { return v < a ? a : v > b ? b : v; },
@@ -162,6 +177,37 @@
   };
   KV.util = util;
 
+  /* ---------------- таймеры самого ядра ----------------
+     Правило проекта «все таймеры только через api.*» относится к сценам,
+     но у ядра собственного api нет: подсветка клетки и пролёт токена
+     заводят таймер сами. Чтобы они не пережили главу, ядро держит их
+     здесь, а KV.lifecycle().destroy() гасит этот список вместе со
+     сценовскими. Голый setTimeout остался только здесь и в api.timeout —
+     это сами примитивы; в коде ядра вызовов мимо реестра больше нет. */
+
+  var coreTimers = [];
+
+  function coreTimeout(ms, fn) {
+    var id = setTimeout(function () {
+      var i = coreTimers.indexOf(id);
+      if (i >= 0) coreTimers.splice(i, 1);
+      fn();
+    }, ms);
+    coreTimers.push(id);
+    return id;
+  }
+
+  function coreClearTimeout(id) {
+    clearTimeout(id);
+    var i = coreTimers.indexOf(id);
+    if (i >= 0) coreTimers.splice(i, 1);
+  }
+
+  function coreStopTimers() {
+    coreTimers.forEach(function (id) { clearTimeout(id); });
+    coreTimers = [];
+  }
+
   /* ---------------- глоссарий и подсказки ---------------- */
 
   KV.glossary = {
@@ -174,7 +220,7 @@
     "консьюмер": "Тот, кто читает из топика. Сам помнит свою позицию (offset) — «глупый брокер, умный консьюмер».",
     "ключ": "key сообщения. Определяет партицию: hash(ключ) % количество партиций. Одинаковый ключ → всегда одна партиция → порядок.",
     "consumer group": "Несколько копий одного сервиса, читающих топик совместно. Kafka раздаёт партиции между членами группы; одну партицию читает максимум один консьюмер группы.",
-    "ребаланс": "Переназначение партиций между членами группы, когда кто-то ушёл или пришёл. На время ребаланса ВСЁ потребление в группе останавливается.",
+    "ребаланс": "Переназначение партиций между членами группы, когда кто-то ушёл или пришёл. При классической (eager) стратегии на это время ВСЁ потребление в группе останавливается: партиции отбирают у всех и раздают заново. Стратегия cooperative-sticky забирает только переезжающие партиции, остальные продолжают читаться.",
     "committed offset": "Позиция, до которой дочитала группа. Хранится в самой Kafka, в служебном топике __consumer_offsets. Это номер СЛЕДУЮЩЕГО сообщения для чтения, а не последнего обработанного.",
     "LEO": "Log-end offset — номер, который получит следующая записанная в партицию запись. Конец лога.",
     "lag": "Отставание: LEO минус committed offset. Сколько сообщений консьюмер ещё не прочитал. Главная метрика здоровья.",
@@ -192,14 +238,16 @@
     "exactly-once": "Ровно один раз. В Kafka работает в контуре Kafka → Kafka (идемпотентный продюсер + транзакции). Для внешней базы всё равно нужна идемпотентность на своей стороне.",
     "hot key": "Перекос: если большая часть событий идёт с одним ключом, все они лягут в одну партицию. Она перегружена, остальные простаивают.",
     "max.poll.interval.ms": "Интервал, за который консьюмер обязан вернуться за новой порцией. Не успел — Kafka считает его мёртвым и запускает ребаланс.",
-    "round-robin": "Раскладка по кругу: без ключа сообщения раскидываются по партициям равномерно, но без гарантии порядка.",
+    "round-robin": "Раскладка по кругу. Партицию для записи без ключа выбирает продюсер, а не брокер, и с Kafka 2.4 (KIP-480) кладёт «липко»: набивает одну партицию, пока не закроется батч, и только потом берёт следующую (с 3.3 это встроенное поведение, KIP-794, а DefaultPartitioner и UniformStickyPartitioner устарели). Ровно выходит по батчам, а не по сообщениям; порядка между партициями без ключа нет в любом случае.",
     "__consumer_offsets": "Служебный топик самой Kafka, где хранятся committed offsets всех групп."
   };
 
   var tipEl = null;
+  var tipFor = null;        // термин, к которому сейчас привязана подсказка
+  var TIP_ID = "kv-tip";
   function ensureTip() {
     if (!tipEl) {
-      tipEl = el("div.kv-tip", { role: "tooltip" });
+      tipEl = el("div.kv-tip#" + TIP_ID, { role: "tooltip" });
       document.body.appendChild(tipEl);
     }
     return tipEl;
@@ -209,6 +257,11 @@
     var text = KV.glossary[term];
     if (!text) return;
     var t = ensureTip();
+    if (tipFor && tipFor !== target) tipFor.removeAttribute("aria-describedby");
+    tipFor = target;
+    // Связываем термин с подсказкой: без этого скринридер объявит слово,
+    // но не определение — подсказка для него просто чужой блок на body.
+    target.setAttribute("aria-describedby", TIP_ID);
     t.innerHTML = "<b>" + util.escape(term) + "</b> — " + util.escape(text);
     t.style.left = "-9999px";
     t.style.top = "0px";
@@ -221,7 +274,10 @@
     t.style.left = left + "px";
     t.style.top = top + "px";
   }
-  function hideTip() { if (tipEl) tipEl.classList.remove("is-on"); }
+  function hideTip() {
+    if (tipFor) { tipFor.removeAttribute("aria-describedby"); tipFor = null; }
+    if (tipEl) tipEl.classList.remove("is-on");
+  }
 
   document.addEventListener("mouseover", function (e) {
     var t = e.target.closest && e.target.closest("[data-term]");
@@ -235,7 +291,22 @@
     if (t) showTip(t);
   });
   document.addEventListener("focusout", hideTip);
-  global.addEventListener("scroll", hideTip, true);
+  // Escape убирает подсказку, не сдвигая фокус: тому, кто идёт по главе с
+  // клавиатуры, иначе нечем закрыть определение — увести фокус с термина
+  // это единственный способ, а он же уносит с места чтения.
+  document.addEventListener("keydown", function (e) {
+    if (tipFor && (e.key === "Escape" || e.key === "Esc")) hideTip();
+  });
+  // Гасим подсказку только тогда, когда прокрутка реально уводит термин
+  // из-под неё. Раньше слушатель стоял на ЛЮБОЙ прокрутке в капчер-фазе,
+  // а ленты стендов сами доводят себя до хвоста (logStrip.push →
+  // followEnd) — их scroll прилетал сюда и гасил подсказку через
+  // десятки миллисекунд после наведения, на любой живой главе.
+  global.addEventListener("scroll", function (e) {
+    if (!tipFor) return;
+    var sc = e.target;
+    if (sc === document || sc === global || (sc && sc.nodeType === 1 && sc.contains(tipFor))) hideTip();
+  }, true);
 
   /* ---------------- компоненты ---------------- */
 
@@ -248,7 +319,10 @@
    */
   KV.terms = function (html) {
     return String(html).replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, function (_, term, label) {
-      return '<span class="kv-term" tabindex="0" data-term="' + util.escape(term.trim()) + '">' +
+      // role="term" + aria-describedby (вешается в showTip) — чтобы
+      // скринридер объявил не только слово, но и определение из глоссария.
+      return '<span class="kv-term" role="term" tabindex="0" data-term="' +
+        util.escape(term.trim()) + '">' +
         util.escape((label || term).trim()) + "</span>";
     });
   };
@@ -420,19 +494,28 @@
     return el("div.kv-tablewrap", null, el("table.kv-table", null, thead, tbody));
   };
 
-  /** Псевдо-консоль для журналов. @returns {{el, write(html), clear()}} */
-  ui.terminal = function (initial) {
+  /** Псевдо-консоль для журналов.
+   *  opts.max — сколько строк держать (по умолчанию 80): длинные прогоны
+   *  (шторм в главе 13, песочница) иначе растят журнал без предела.
+   *  line() — то же самое, что write(): второе имя осталось для сцен.
+   *  @returns {{el, write(html), line(html), clear()}} */
+  ui.terminal = function (initial, opts) {
+    opts = opts || {};
+    var MAX = opts.max || 80;
     var root = el("pre.kv-terminal", { html: initial || "" });
+    /** Доводчик вниз — только если читатель не отмотал журнал вверх. */
+    function stuck() { return root.scrollHeight - root.clientHeight - root.scrollTop <= 24; }
+    function write(html) {
+      var follow = stuck();
+      root.insertAdjacentHTML("beforeend", (root.innerHTML ? "\n" : "") + html);
+      var lines = root.innerHTML.split("\n");
+      if (lines.length > MAX) root.innerHTML = lines.slice(-MAX).join("\n");
+      if (follow) root.scrollTop = root.scrollHeight;
+    }
     return {
       el: root,
-      write: function (html) {
-        root.insertAdjacentHTML("beforeend", (root.innerHTML ? "\n" : "") + html);
-        root.scrollTop = root.scrollHeight;
-      },
-      line: function (html) {
-        root.insertAdjacentHTML("beforeend", (root.innerHTML ? "\n" : "") + html);
-        root.scrollTop = root.scrollHeight;
-      },
+      write: write,
+      line: write,
       clear: function () { root.innerHTML = ""; }
     };
   };
@@ -493,7 +576,7 @@
    * @returns {{el, track, push(rec), setRecords(arr), records,
    *            marker(id,opts), removeMarker(id), setLeo(bool),
    *            cell(off), highlight(off,cls,ms), base, setBase(n),
-   *            leo(), clear(), scrollEnd()}}
+   *            leo(), clear(), scrollEnd(), followEnd()}}
    */
   ui.logStrip = function (opts) {
     opts = opts || {};
@@ -504,6 +587,19 @@
     var empty = el("div.kv-strip__empty", { text: opts.empty || "лог пуст" });
     var strip = el("div.kv-strip", null, track, empty);
     var leoEl = null;
+
+    /* Лента сама едет за хвостом — но только пока читатель её не трогал.
+       Раньше push() доводил ленту до конца БЕЗУСЛОВНО, и рассмотреть
+       ранние offset'ы на работающем стенде было нельзя: отмотанная назад
+       лента возвращалась в хвост на каждой новой записи.
+       Смотрим именно на ввод (колесо, палец, мышь, клавиши), а не на
+       событие scroll: последнее прилетает и от нашей же доводки, и от
+       пересборки ленты в setRecords/setBase. Вернулся к хвосту сам —
+       флаг снимается в followEnd, и лента снова едет за записями. */
+    var manual = false;
+    ["wheel", "pointerdown", "touchstart", "keydown"].forEach(function (evt) {
+      strip.addEventListener(evt, function () { manual = true; }, { passive: true });
+    });
 
     if (opts.showLeo !== false) {
       leoEl = el("div.kv-leo", null, el("span", { text: "LEO 0" }));
@@ -524,6 +620,9 @@
     function cellEl(rec, off) {
       var color = rec.color || (rec.key ? util.keyColor(rec.key) : null);
       var soft = rec.key && !rec.color ? util.keyColorSoft(rec.key) : null;
+      // Подпись на бледной заливке — затемнённым тоном (util.keyInk),
+      // иначе в светлой теме контраст падает до 3:1 при кегле 10,5px.
+      var ink = soft ? util.keyInk(rec.key) : (color ? util.ink(color) : null);
       var label = rec.label !== undefined ? rec.label : (rec.key ? util.shortKey(rec.key) : "");
       var c = el("div.kv-cell", {
         title: rec.title || (rec.key ? "ключ " + rec.key + " · offset " + off : "offset " + off),
@@ -531,7 +630,7 @@
       }, String(label));
       if (color) {
         c.style.borderColor = color;
-        c.style.color = color;
+        c.style.color = ink;
         if (soft) c.style.background = soft;
       }
       if (rec.state && rec.state !== "ok") c.classList.add("is-" + rec.state);
@@ -577,7 +676,7 @@
         w._cell.classList.add("is-new");
         track.appendChild(w);
         layoutMarkers();
-        api.scrollEnd();
+        api.followEnd();
         return w._cell;
       },
 
@@ -633,12 +732,21 @@
         return w ? (w._cell || w.firstChild) : null;
       },
 
-      /** Мигнуть клеткой: cls = 'is-hot' (запись) или 'is-reading' (чтение). */
+      /** Мигнуть клеткой: cls = 'is-hot' (запись) или 'is-reading' (чтение).
+       *  Таймер снятия хранится на самой клетке: повторная подсветка той же
+       *  клетки продлевает срок, а не гаснет по чужому, более раннему
+       *  таймеру. Заводится через coreTimeout — значит гаснет вместе с главой. */
       highlight: function (off, cls, ms) {
         var c = api.cell(off);
         if (!c) return;
-        c.classList.add(cls || "is-reading");
-        setTimeout(function () { c.classList.remove(cls || "is-reading"); }, ms || 600);
+        var name = cls || "is-reading";
+        c.classList.add(name);
+        if (!c._hl) c._hl = {};
+        if (c._hl[name]) coreClearTimeout(c._hl[name]);
+        c._hl[name] = coreTimeout(ms || 600, function () {
+          c._hl[name] = 0;
+          c.classList.remove(name);
+        });
       },
 
       /** Сдвинуть начало лога (удаление старого по retention). */
@@ -648,7 +756,16 @@
 
       clear: function () { records.length = 0; render(); return api; },
 
-      scrollEnd: function () { strip.scrollLeft = strip.scrollWidth; },
+      /** Показать хвост принудительно (явный вызов из сцены). */
+      scrollEnd: function () { manual = false; strip.scrollLeft = strip.scrollWidth; },
+
+      /** Доводчик к хвосту после новой записи: если читатель сам отмотал
+       *  ленту — не трогаем её; если он вернулся к хвосту — снова везём. */
+      followEnd: function () {
+        var max = strip.scrollWidth - strip.clientWidth;
+        if (max <= 0 || max - strip.scrollLeft <= STEP * 1.5) manual = false;
+        if (!manual) api.scrollEnd();
+      },
 
       /** Пересчитать позиции флажков (после смены размеров). */
       refresh: layoutMarkers
@@ -666,6 +783,25 @@
 
   /* ---------------- анимация полёта записи ---------------- */
 
+  /** Токены, которые сейчас в полёте: узел висит на document.body, а не
+   *  внутри главы, поэтому смена главы сама его не уносит. Держим список
+   *  и гасим его в destroy(). */
+  var flights = [];
+
+  function landFly(rec) {
+    var i = flights.indexOf(rec);
+    if (i >= 0) flights.splice(i, 1);
+    if (rec.id) { coreClearTimeout(rec.id); rec.id = 0; }
+    rec.node.remove();
+  }
+
+  /** Убрать все летящие токены при смене главы.
+   *  Промис сознательно НЕ резолвим: продолжение .then() принадлежит
+   *  ушедшей главе и дописало бы запись в её уже отсоединённые ленты. */
+  function stopFlights() {
+    while (flights.length) landFly(flights[0]);
+  }
+
   /**
    * Пролёт «токена» от одного элемента к другому.
    * @returns Promise, который резолвится по прибытии.
@@ -682,18 +818,26 @@
         top: (a.top + a.height / 2 - 17) + "px",
         background: opts.soft || "var(--surface)",
         border: "1px solid " + color,
-        color: color
+        // Рамка чистым токеном, подпись затемнённым тоном — та же пара,
+        // что и в клетке ленты, и тот же провал по контрасту без этого.
+        color: util.ink(color)
       }
     }, opts.label || "");
     document.body.appendChild(node);
     var ms = opts.ms || 420;
+    var rec = { node: node, id: 0 };
+    flights.push(rec);
     return new Promise(function (resolve) {
       requestAnimationFrame(function () {
+        if (flights.indexOf(rec) < 0) return;   // главу сменили, пока ждали кадр
         node.style.transition = "transform " + ms + "ms cubic-bezier(.35,.7,.3,1), opacity " + ms + "ms ease";
         node.style.transform = "translate(" +
           (b.left + b.width / 2 - 17 - (a.left + a.width / 2 - 17)) + "px," +
           (b.top + b.height / 2 - 17 - (a.top + a.height / 2 - 17)) + "px)";
-        setTimeout(function () { node.remove(); resolve(); }, ms);
+        rec.id = coreTimeout(ms, function () {
+          landFly(rec);
+          resolve();
+        });
       });
     });
   };
@@ -735,6 +879,8 @@
         rafs.forEach(function (r) { cancelAnimationFrame(r.id); });
         disposers.forEach(function (d) { try { d(); } catch (e) { /* ignore */ } });
         timers = []; rafs = []; disposers = [];
+        stopFlights();      // токены с body — они переживают смену главы
+        coreStopTimers();   // подсветка клеток и уборка токенов
         hideTip();
       }
     };

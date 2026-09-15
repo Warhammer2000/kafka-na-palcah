@@ -138,18 +138,36 @@
     }
     global.scrollTo(0, 0);
 
-    if (!noHash) {
-      try { global.history.replaceState(null, "", "#/" + def.id); }
-      catch (e) { global.location.hash = "#/" + def.id; }
-    }
+    // Каждый переход — отдельная запись в истории: «Назад» в браузере
+    // обязан возвращать на предыдущую главу, а не на предыдущий сайт.
+    if (!noHash) setAddress(def.id, false);
+  }
+
+  function setAddress(id, replace) {
+    var url = "#/" + id;
+    try { global.history[replace ? "replaceState" : "pushState"](null, "", url); }
+    catch (e) { global.location.hash = url; }
   }
 
   /* ---------------- клавиатура ---------------- */
 
+  // Стрелки листают главы только тогда, когда их некому потратить.
+  // Кнопка стенда, ползунок, поле, прокручиваемая вбок лента — каждый
+  // из них сам ждёт стрелку; отобрать её значит снести главу вместе с
+  // состоянием стенда, которое читатель набирал руками.
+  function ownsArrows(t) {
+    if (!t || t.nodeType !== 1) return false;
+    var tag = t.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || t.isContentEditable) return true;
+    if (t !== document.body && t !== document.documentElement
+      && t.scrollWidth - t.clientWidth > 1) return true;   // есть куда прокрутить вбок
+    return !!(t.closest && t.closest(".kv-stage"));         // что угодно внутри стенда
+  }
+
   document.addEventListener("keydown", function (e) {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    var t = e.target;
-    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    if (ownsArrows(e.target)) return;
     if (!current) return;
     var i = scenes.indexOf(current.def);
     if (e.key === "ArrowRight" && scenes[i + 1]) { go(scenes[i + 1].id); e.preventDefault(); }
@@ -166,7 +184,11 @@
   function boot() {
     document.body.appendChild(app);
     var id = (global.location.hash || "").replace(/^#\/?/, "");
-    go(byId[id] ? id : scenes[0].id, true);
+    var first = byId[id] ? id : scenes[0].id;
+    go(first, true);
+    // Первую главу кладём в историю заменой: тогда «Назад» со второй
+    // главы возвращает сюда, а не на то, что было до страницы.
+    setAddress(first, true);
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);

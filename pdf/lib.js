@@ -30,22 +30,22 @@ const C = {
   muted: rgb(0.357, 0.416, 0.486),
   faint: rgb(0.549, 0.600, 0.659),
   line: rgb(0.808, 0.843, 0.890),
-  write: rgb(0.780, 0.478, 0.090),
-  read: rgb(0.071, 0.514, 0.467),
-  good: rgb(0.184, 0.522, 0.318),
-  warn: rgb(0.725, 0.424, 0.071),
-  bad: rgb(0.753, 0.220, 0.298),
+  write: rgb(0.600, 0.369, 0.071),
+  read: rgb(0.063, 0.463, 0.420),
+  good: rgb(0.165, 0.463, 0.282),
+  warn: rgb(0.596, 0.349, 0.059),
+  bad: rgb(0.722, 0.212, 0.286),
   white: rgb(1, 1, 1),
 };
 
 /** Палитра ключей — цвет данных. Индекс = ключ. */
 const KEYS = [
-  rgb(0.290, 0.435, 0.769), // k0 синий
-  rgb(0.722, 0.329, 0.431), // k1 розовый
-  rgb(0.243, 0.561, 0.369), // k2 зелёный
-  rgb(0.541, 0.357, 0.753), // k3 фиолетовый
-  rgb(0.753, 0.475, 0.122), // k4 янтарный
-  rgb(0.114, 0.541, 0.620), // k5 бирюзовый
+  rgb(0.239, 0.392, 0.737), // k0 синий
+  rgb(0.659, 0.275, 0.373), // k1 розовый
+  rgb(0.200, 0.463, 0.306), // k2 зелёный
+  rgb(0.498, 0.298, 0.729), // k3 фиолетовый
+  rgb(0.580, 0.365, 0.094), // k4 янтарный
+  rgb(0.094, 0.451, 0.518), // k5 бирюзовый
 ];
 
 const PAGE = { w: 842, h: 595 };
@@ -111,16 +111,78 @@ function checkGlyphs(ctx, font, text, where) {
     if (!fk.hasGlyphForCodePoint(cp) && bad.indexOf(ch) < 0) bad.push(ch);
   }
   if (bad.length) {
-    GLYPH_MISS.push(where + ": в шрифте нет «" + bad.join(" ") + "» — текст «" +
-      String(text).slice(0, 40) + "»");
+    // одна метка — это N одинаковых виджетов, жаловаться N раз незачем
+    const msg = where + ": в шрифте нет «" + bad.join(" ") + "» — текст «" +
+      String(text).slice(0, 40) + "»";
+    if (GLYPH_MISS.indexOf(msg) < 0) GLYPH_MISS.push(msg);
   }
 }
 
-/** Обернуть страницу проверкой глифов. */
+/** Подпись виджета (кнопки, метки, стопки) сторож глифов сам не видит:
+ *  она идёт не через page.drawText, а через addToPage. А пустой глиф в
+ *  подписи — самый незаметный дефект: метка просто окажется пустой. */
+function checkCaption(ctx, font, text, where) {
+  if (text === undefined || text === null || text === "") return;
+  checkGlyphs(ctx, font, text, where);
+}
+
+/* ---------------- сторож перекрытий ----------------
+   Виджет формы рисуется ПОВЕРХ содержимого страницы, и, если у него есть
+   заливка, он закрывает собой всё, что под ним. Подпись, поставленную
+   вплотную к ленте, так и съедает метка в своей крайней позиции — причём
+   видно это только тогда, когда стенд до этой позиции дойдёт. Глазами такое
+   не ловится (виджет прячется, пока не придёт его черёд), поэтому считаем
+   прямоугольники: ВСЕ позиции метки, включая скрытые на старте. */
+
+const OVERLAP = [];
+const BOXES = [];    // непрозрачные виджеты
+const LABELS = [];   // подписи, нарисованные на самой странице
+let pageSeq = 0;
+
+function pageId(page) {
+  if (!page.__kvId) page.__kvId = ++pageSeq;
+  return page.__kvId;
+}
+
+/** Запомнить непрозрачный виджет. */
+function noteBox(page, box, fill) {
+  if (!fill) return;
+  BOXES.push({ p: pageId(page), x: box.x, y: box.y, w: box.w, h: box.h });
+}
+
+function noteLabel(ctx, page, text, o, where) {
+  const size = o.size || 12;
+  const font = o.font || ctx.fonts.sans;
+  const s = String(text);
+  const w = font.widthOfTextAtSize(s, size) + (o.characterSpacing || 0) * s.length;
+  LABELS.push({
+    p: pageId(page), where, text: s,
+    x: o.x, y: o.y - size * 0.22, w, h: size * 0.94,
+  });
+}
+
+function checkOverlaps() {
+  LABELS.forEach((l) => {
+    for (const b of BOXES) {
+      if (b.p !== l.p) continue;
+      if (l.x + l.w <= b.x || b.x + b.w <= l.x) continue;
+      if (l.y + l.h <= b.y || b.y + b.h <= l.y) continue;
+      OVERLAP.push(l.where + ": подпись «" + l.text.slice(0, 28) +
+        "» (x " + Math.round(l.x) + ".." + Math.round(l.x + l.w) +
+        ", y " + Math.round(l.y) + ") закрыта виджетом x " +
+        Math.round(b.x) + ".." + Math.round(b.x + b.w) + ", y " +
+        Math.round(b.y) + ".." + Math.round(b.y + b.h));
+      return;   // одной жалобы на подпись достаточно: позиций у метки много
+    }
+  });
+}
+
+/** Обернуть страницу проверкой глифов и учётом подписей. */
 function guardPage(ctx, page, where) {
   const draw = page.drawText.bind(page);
   page.drawText = (s, o) => {
     checkGlyphs(ctx, o.font, s, where);
+    noteLabel(ctx, page, s, o, where);
     return draw(s, o);
   };
   return page;
@@ -202,6 +264,7 @@ function stack(ctx, page, base, states, box) {
   states.forEach((s, k) => {
     const b = form.createButton(base + "_" + k);
     const font = s.mono ? fonts.mono : fonts.sans;
+    checkCaption(ctx, font, s.caption, "стопка «" + base + "»");
     b.addToPage(s.caption || "", page, {
       x: box.x, y: box.y, width: box.w, height: box.h,
       font,
@@ -211,6 +274,7 @@ function stack(ctx, page, base, states, box) {
       textColor: s.captionColor || C.white,
     });
     fit(b, font, s.size || box.size || 8);
+    noteBox(page, box, s.fill);
     if (k !== (box.initial || 0)) hide(ctx, b);
   });
   return { base, count: states.length };
@@ -243,7 +307,9 @@ function slider(ctx, page, base, positions, x0, y, opts) {
   const o = opts || {};
   states.forEach((i) => {
     const b = ctx.form.createButton(base + "_" + i);
-    b.addToPage(o.caption ? o.caption(i) : String(i), page, {
+    const cap = o.caption ? o.caption(i) : String(i);
+    checkCaption(ctx, ctx.fonts.mono, cap, "метка «" + base + "»");
+    b.addToPage(cap, page, {
       x: x0 + i * STEP + (o.dx || 0), y,
       width: o.w || CELL, height: o.h || 14,
       font: ctx.fonts.mono,
@@ -253,25 +319,33 @@ function slider(ctx, page, base, positions, x0, y, opts) {
       textColor: o.textColor || C.white,
     });
     fit(b, ctx.fonts.mono, o.size || 7.5);
+    noteBox(page, { x: x0 + i * STEP + (o.dx || 0), y, w: o.w || CELL, h: o.h || 14 }, o.fill);
     if (i !== (o.initial || 0)) hide(ctx, b);
   });
   return { base, count: positions };
 }
 
-/** Текстовое поле — единственный способ показать МЕНЯЮЩИЙСЯ текст. */
+/** Текстовое поле — единственный способ показать МЕНЯЮЩИЙСЯ текст.
+ *  ВАЖНО: однострочное поле обрезает длинную строку на правом краю молча —
+ *  ни переноса, ни многоточия, ни следа в файле. Для пояснений, которые
+ *  собираются из чисел на лету и заранее не измеряются, ставь multiline. */
 function readout(ctx, page, name, box, opts) {
   const o = opts || {};
   const f = ctx.form.createTextField(name);
   f.setText(o.text || "");
+  checkCaption(ctx, o.mono ? ctx.fonts.mono : ctx.fonts.sans, o.text, "поле «" + name + "»");
   if (o.align === "center") f.setAlignment(1);
   if (o.align === "right") f.setAlignment(2);
+  if (o.multiline) f.enableMultiline();
   const font = o.mono ? ctx.fonts.mono : ctx.fonts.sans;
+  noteBox(page, box, o.fill === null ? undefined : (o.fill || C.surface2));
   f.addToPage(page, {
     x: box.x, y: box.y, width: box.w, height: box.h,
     font,
     backgroundColor: o.fill === null ? undefined : (o.fill || C.surface2),
     borderColor: o.border === null ? undefined : (o.border || C.line),
     borderWidth: o.borderWidth === undefined ? 1 : o.borderWidth,
+    textColor: o.textColor,
   });
   // /DA появляется только после размещения — размер шрифта ставим здесь,
   // иначе просмотрщик растянет текст на всю высоту поля.
@@ -287,6 +361,7 @@ function readout(ctx, page, name, box, opts) {
 function action(ctx, page, name, caption, box, js, opts) {
   const o = opts || {};
   const b = ctx.form.createButton(name);
+  checkCaption(ctx, ctx.fonts.bold, caption, "кнопка «" + name + "»");
   b.addToPage(caption, page, {
     x: box.x, y: box.y, width: box.w, height: box.h,
     font: ctx.fonts.bold,
@@ -296,6 +371,7 @@ function action(ctx, page, name, caption, box, js, opts) {
     textColor: o.textColor || C.ink,
   });
   fit(b, ctx.fonts.bold, o.size || 9.5);
+  noteBox(page, box, o.fill || C.surface);
   const w = b.acroField.getWidgets()[0];
   w.dict.set(
     PDFName.of("A"),
@@ -337,6 +413,17 @@ function kvTick() {
     try { TICKERS[i](); } catch (e) { }
   }
 }
+
+/** Возврат app.setInterval ОБЯЗАН лежать в долгоживущей переменной.
+ *  Acrobat считает объект интервала мусором, если на него никто не ссылается,
+ *  и собирает его вместе с таймером: анимация молча встаёт через минуту-другую,
+ *  а в PDFium (Chrome/Edge) этого не видно — там таймер держит сам движок.
+ *  Отсюда KV_TIMER: одна ссылка на весь документ, и повторный запуск запрещён. */
+var KV_TIMER = null;
+function kvStart(ms) {
+  if (KV_TIMER) return;
+  KV_TIMER = app.setInterval("kvTick()", ms);
+}
 `;
 
 /** Собрать и записать документный скрипт.
@@ -366,6 +453,11 @@ async function save(ctx, out) {
   // Свой внешний вид каждому полю уже задан через fit() нужным шрифтом.
   // Автоматический проход pdf-lib пересобрал бы их стандартным Helvetica,
   // в котором нет кириллицы, — и сборка падает на первой же букве.
+  checkOverlaps();
+  if (OVERLAP.length) {
+    console.log("ПОДПИСИ ПОД ВИДЖЕТАМИ (" + OVERLAP.length + "):");
+    OVERLAP.forEach((m) => console.log("  " + m));
+  }
   if (GLYPH_MISS.length) {
     console.log("ПРОПАВШИЕ ГЛИФЫ (" + GLYPH_MISS.length + "):");
     GLYPH_MISS.forEach((m) => console.log("  " + m));
@@ -377,7 +469,7 @@ async function save(ctx, out) {
 }
 
 module.exports = {
-  fit, guardPage, checkGlyphs, GLYPH_MISS,
+  fit, guardPage, checkGlyphs, GLYPH_MISS, checkOverlaps, OVERLAP,
   C, KEYS, PAGE, CELL, GAP, STEP,
   createDoc, addStand, wrapText, tag,
   stack, hide, logCell, slider, readout, action,

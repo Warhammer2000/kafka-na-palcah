@@ -42,6 +42,16 @@
 
       var mini = ui.logStrip({ label: "партиция 0", sub: "топик payments", showLeo: false });
 
+      /** Перешагнутая запись ЦЕЛА — она лежит в логе. Выцветание (.is-dropped)
+       *  в этом курсе означает «записи больше нет» (глава 09), поэтому клетку
+       *  не гасим, а обводим тревожным кольцом: видно, что с ней беда,
+       *  но она на месте. Кольцо снимается само при перерисовке ленты. */
+      function markSkipped(c) {
+        if (!c) return;
+        c.style.boxShadow = "0 0 0 2px var(--bad)";
+        c.title = "offset 4 — запись лежит в логе, но группа её перешагнула";
+      }
+
       function paintMini() {
         mini.setRecords(MINI_KEYS.map(function (k) { return { key: k }; }));
         for (var i = 0; i <= MDONE; i++) {
@@ -67,7 +77,7 @@
           say = "<b>Верно.</b> Обработал до offset 3 → коммитишь <b>4</b>: «следующим дай мне четвёртый». " +
             "Флажок всегда стоит ПОСЛЕ последней обработанной клетки, а не на ней.";
         } else {
-          mini.setState(4, "dropped");
+          markSkipped(mini.cell(4));
           var c5 = mini.cell(5);
           if (c5) c5.classList.add("is-reading");
           say = "<b>Плюс один.</b> Offset 4 («оплата») эта группа уже не прочитает: по закладке он «дочитан». " +
@@ -424,8 +434,8 @@
           stateStat.set("поднялся", "read");
           term.line(sec(e.t) + '<span class="t-r">консьюмер поднялся</span> · poll() читает с committed = ' + committedNow);
           if (plan.lost) {
-            strip.setState(TARGET, "dropped");
-            setBadges(ui.badge("offset 4 потерян", "bad"), ui.badge("lag = 0", "good"));
+            markSkipped(strip.cell(TARGET));
+            setBadges(ui.badge("offset 4 перешагнули — запись цела", "bad"), ui.badge("lag = 0", "good"));
             term.line(sec(e.t) + '<span class="t-bad">offset 4 пропущен</span>: по закладке он «дочитан», ' +
               'а обработан не был');
             term.line(sec(e.t) + '<span class="t-dim">исключений нет · lag = 0 · мониторинг зелёный</span>');

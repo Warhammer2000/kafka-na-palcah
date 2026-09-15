@@ -13,30 +13,39 @@
   --surface-3:   #E8EDF4;
   --ink:         #131A23;
   --ink-2:       #35414F;
-  --muted:       #5B6A7C;
-  --faint:       #8C99A8;
+  --muted:       #52606F;
+  --faint:       #647280;
   --line:        #CED7E3;
   --line-soft:   #E1E7EF;
 
   /* --- сигнальные --- */
-  --write:       #C77A17;
+  --write:       #995E12;
   --write-soft:  #FBEFDC;
-  --read:        #128377;
+  --read:        #10766B;
   --read-soft:   #DCF1EE;
-  --good:        #2F8551;
+  --good:        #2A7648;
   --good-soft:   #DDF0E4;
-  --warn:        #B96C12;
+  --warn:        #98590F;
   --warn-soft:   #FBECD7;
-  --bad:         #C0384C;
+  --bad:         #B83649;
   --bad-soft:    #FBE2E5;
 
+  /* --- сигнальные в роли текста и подложки ---
+     Заливочный янтарь как ЦВЕТ ТЕКСТА на светлом фоне даёт 2,9:1,
+     поэтому у текста свой оттенок; в тёмной теме оба совпадают. */
+  --write-ink:   #96560F;   /* янтарь для текста */
+  --on-write:    #FFFFFF;   /* чернила поверх янтарной заливки */
+  --read-fill:   #0C6F65;   /* бирюза под белым текстом (заливка кнопки) */
+  --on-read:     #FFFFFF;   /* чернила поверх бирюзовой заливки */
+  --tip-key:     #F0B45C;   /* акцент в подсказке: плашка там цвета --ink */
+
   /* --- палитра ключей (данные) --- */
-  --k0: #4A6FC4;
-  --k1: #B8546E;
-  --k2: #3E8F5E;
-  --k3: #8A5BC0;
-  --k4: #C0791F;
-  --k5: #1D8A9E;
+  --k0: #3D64BC;
+  --k1: #A8465F;
+  --k2: #33764E;
+  --k3: #7F4CBA;
+  --k4: #945D18;
+  --k5: #187384;
   --k0-soft: #E2E9F8;
   --k1-soft: #F8E2E8;
   --k2-soft: #DFF0E5;
@@ -68,7 +77,7 @@
     --ink:       #E4EAF2;
     --ink-2:     #C2CCD9;
     --muted:     #8896A8;
-    --faint:     #6A7889;
+    --faint:     #7E8C9E;
     --line:      #27323F;
     --line-soft: #1F2833;
 
@@ -82,6 +91,12 @@
     --warn-soft:  #382713;
     --bad:        #E4697C;
     --bad-soft:   #3A1920;
+
+    --write-ink:  #F0B45C;
+    --on-write:   #2A1802;
+    --read-fill:  #3FC6B7;
+    --on-read:    #04211D;
+    --tip-key:    #8F5510;
 
     --k0: #7C9BEA; --k0-soft: #1B2540;
     --k1: #E08099; --k1-soft: #38202A;
@@ -104,7 +119,7 @@
   --ink:       #E4EAF2;
   --ink-2:     #C2CCD9;
   --muted:     #8896A8;
-  --faint:     #6A7889;
+  --faint:     #7E8C9E;
   --line:      #27323F;
   --line-soft: #1F2833;
 
@@ -118,6 +133,12 @@
   --warn-soft:  #382713;
   --bad:        #E4697C;
   --bad-soft:   #3A1920;
+
+  --write-ink:  #F0B45C;
+  --on-write:   #2A1802;
+  --read-fill:  #3FC6B7;
+  --on-read:    #04211D;
+  --tip-key:    #8F5510;
 
   --k0: #7C9BEA; --k0-soft: #1B2540;
   --k1: #E08099; --k1-soft: #38202A;
@@ -152,7 +173,7 @@ body {
   border-radius: 2px;
 }
 
-::selection { background: var(--write); color: #fff; }
+::selection { background: var(--write); color: var(--on-write); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -198,7 +219,7 @@ body {
   margin: 0;
   color: var(--ink);
 }
-.kv-wordmark span { color: var(--write); }
+.kv-wordmark span { color: var(--write-ink); }
 .kv-wordmark small {
   display: block;
   font-family: var(--f-mono);
@@ -258,7 +279,7 @@ body {
   font-weight: 600;
   box-shadow: inset 2px 0 0 var(--write);
 }
-.kv-nav__item[aria-current="true"] .kv-nav__num { color: var(--write); }
+.kv-nav__item[aria-current="true"] .kv-nav__num { color: var(--write-ink); }
 
 .kv-main {
   min-width: 0;
@@ -299,7 +320,7 @@ body {
   font-size: 12px;
   font-weight: 600;
   letter-spacing: .16em;
-  color: var(--write);
+  color: var(--write-ink);
   text-transform: uppercase;
 }
 
@@ -336,17 +357,21 @@ body {
   margin: 30px 0 0;
   line-height: 1.3;
 }
+/* Подзаголовок внутри прозы. Проза лежит прямо на фоне страницы, а не на
+   белой карточке, и самый бледный токен там не добирает до 4,5:1 (4,16).
+   Да и по смыслу подзаголовок не должен быть самым бледным на странице —
+   поэтому уровень выше, --muted. */
 .kv-prose h4 {
   font-family: var(--f-mono);
   font-size: 11px;
   letter-spacing: .1em;
   text-transform: uppercase;
-  color: var(--faint);
+  color: var(--muted);
   font-weight: 500;
   margin: 24px 0 0;
 }
 .kv-prose strong { font-weight: 600; color: var(--ink); }
-.kv-prose em { font-style: normal; color: var(--write); font-weight: 500; }
+.kv-prose em { font-style: normal; color: var(--write-ink); font-weight: 500; }
 .kv-prose ul, .kv-prose ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 7px; }
 .kv-prose li::marker { color: var(--faint); }
 .kv-prose code {
@@ -382,7 +407,7 @@ body {
   transition: opacity .13s ease, transform .13s ease;
 }
 .kv-tip.is-on { opacity: 1; transform: none; }
-.kv-tip b { color: var(--write); }
+.kv-tip b { color: var(--tip-key); }
 
 /* ============================ врезка ============================ */
 .kv-note {
@@ -491,15 +516,24 @@ body {
 .kv-btn--primary {
   background: var(--write);
   border-color: var(--write);
-  color: #2A1802;
+  color: var(--on-write);
 }
+/* .kv-btn:hover весомее (класс + псевдокласс), чем .kv-btn--primary/--read,
+   и без повторной заливки перекрашивает кнопку в --surface-3. Для --read это
+   провал: белые чернила --on-read на почти белом фоне дают 1,02:1. Поэтому
+   обе цветные кнопки повторяют свою заливку в :hover. */
 .kv-btn--primary:hover { filter: brightness(1.07); background: var(--write); }
-.kv-btn--read { background: var(--read); border-color: var(--read); color: #04211D; }
-.kv-btn--read:hover { filter: brightness(1.07); }
+.kv-btn--read { background: var(--read-fill); border-color: var(--read-fill); color: var(--on-read); }
+.kv-btn--read:hover { filter: brightness(1.07); background: var(--read-fill); }
 .kv-btn--danger { border-color: var(--bad); color: var(--bad); background: var(--bad-soft); }
 .kv-btn--ghost { background: transparent; }
 .kv-btn--sm { font-size: 12px; padding: 6px 10px; }
 .kv-btn[aria-pressed="true"] { background: var(--surface-3); border-color: var(--muted); font-weight: 600; }
+/* Та же каскадная ловушка, что и у :hover выше: селектор с атрибутом весомее
+   модификатора и залил бы цветную кнопку светлым, оставив светлые чернила.
+   Сегодня aria-pressed ставят только обычные кнопки, но мина лежит. */
+.kv-btn--primary[aria-pressed="true"] { background: var(--write); border-color: var(--write); color: var(--on-write); }
+.kv-btn--read[aria-pressed="true"] { background: var(--read-fill); border-color: var(--read-fill); color: var(--on-read); }
 
 .kv-ctl {
   display: flex;
@@ -584,6 +618,9 @@ input[type="range"].kv-range::-moz-range-thumb {
   color: var(--muted); cursor: pointer; white-space: nowrap;
 }
 .kv-seg button:last-child { border-right: 0; }
+/* У .kv-seg скруглённые края держатся на overflow: hidden, и внешнее
+   кольцо фокуса срезалось бы вместе с ними — рисуем его внутрь. */
+.kv-seg button:focus-visible { outline-offset: -3px; }
 .kv-seg button[aria-pressed="true"] { background: var(--surface-3); color: var(--ink); font-weight: 600; }
 
 /* ============================ лог-лента ============================ */
@@ -659,7 +696,16 @@ input[type="range"].kv-range::-moz-range-thumb {
 .kv-cell.is-hot { box-shadow: 0 0 0 2px var(--write); }
 .kv-cell.is-reading { box-shadow: 0 0 0 2px var(--read); }
 .kv-cell.is-expired { opacity: .26; border-style: dashed; background: transparent; }
-.kv-cell.is-dropped { opacity: .22; background: transparent; border-style: dotted; }
+/* Выброшенную уплотнением запись обесцвечиваем, но НЕ гасим прозрачностью:
+   при opacity .22 подпись ключа падала до ~1,3:1 — а именно она и есть
+   предмет главы. !important снимает инлайновые цвета ключа (ui.logStrip). */
+.kv-cell.is-dropped {
+  background: transparent !important;
+  border-style: dotted;
+  border-color: var(--line) !important;
+  color: var(--muted) !important;
+  text-decoration: line-through;
+}
 .kv-cell.is-tomb {
   background: repeating-linear-gradient(45deg, var(--surface-3) 0 4px, var(--surface) 4px 8px);
   color: var(--muted);
@@ -684,8 +730,8 @@ input[type="range"].kv-range::-moz-range-thumb {
   display: flex; align-items: center; gap: 4px;
   height: 34px;
   padding-left: 6px;
-  border-left: 2px solid var(--write);
-  font-family: var(--f-mono); font-size: 9.5px; color: var(--write);
+  border-left: 2px solid var(--write-ink);
+  font-family: var(--f-mono); font-size: 9.5px; color: var(--write-ink);
   white-space: nowrap;
   transition: left .32s cubic-bezier(.3,.8,.3,1);
   pointer-events: none;
@@ -736,7 +782,7 @@ input[type="range"].kv-range::-moz-range-thumb {
 .kv-stat--warn .kv-stat__v { color: var(--warn); }
 .kv-stat--bad  .kv-stat__v { color: var(--bad); }
 .kv-stat--read .kv-stat__v { color: var(--read); }
-.kv-stat--write .kv-stat__v { color: var(--write); }
+.kv-stat--write .kv-stat__v { color: var(--write-ink); }
 
 .kv-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--muted); }
 .kv-legend__i { display: inline-flex; align-items: center; gap: 6px; }
@@ -753,7 +799,7 @@ input[type="range"].kv-range::-moz-range-thumb {
 .kv-badge--warn { color: var(--warn); background: var(--warn-soft); border-color: var(--warn); }
 .kv-badge--bad  { color: var(--bad);  background: var(--bad-soft);  border-color: var(--bad); }
 .kv-badge--read { color: var(--read); background: var(--read-soft); border-color: var(--read); }
-.kv-badge--write{ color: var(--write);background: var(--write-soft);border-color: var(--write); }
+.kv-badge--write{ color: var(--write-ink);background: var(--write-soft);border-color: var(--write); }
 
 .kv-tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
 .kv-table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 480px; }
@@ -782,7 +828,7 @@ input[type="range"].kv-range::-moz-range-thumb {
   min-height: 60px;
 }
 .kv-terminal .t-dim { color: var(--faint); }
-.kv-terminal .t-w { color: var(--write); }
+.kv-terminal .t-w { color: var(--write-ink); }
 .kv-terminal .t-r { color: var(--read); }
 .kv-terminal .t-bad { color: var(--bad); }
 .kv-terminal .t-good { color: var(--good); }
@@ -810,7 +856,7 @@ input[type="range"].kv-range::-moz-range-thumb {
   text-transform: uppercase; color: var(--ink); margin-bottom: 10px;
 }
 .kv-takeaway ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; font-size: 15.5px; }
-.kv-takeaway li::marker { color: var(--write); }
+.kv-takeaway li::marker { color: var(--write-ink); }
 
 .kv-pager { display: flex; gap: 12px; justify-content: space-between; margin-top: 12px; max-width: 1040px; padding: 0 32px; margin-left: auto; margin-right: auto; }
 .kv-pager button {
@@ -835,7 +881,9 @@ input[type="range"].kv-range::-moz-range-thumb {
   .kv-rail__head { padding: 12px 16px; border-bottom: 0; }
   .kv-nav {
     display: flex; gap: 6px; overflow-x: auto; overflow-y: hidden;
-    padding: 0 16px 12px;
+    /* верхний отступ нужен не для красоты: без него прокручиваемая полоса
+       срезает верх кольца :focus-visible у пункта меню */
+    padding: 3px 16px 12px;
   }
   .kv-nav__group { display: none; }
   .kv-nav__item {
@@ -845,7 +893,9 @@ input[type="range"].kv-range::-moz-range-thumb {
   }
   .kv-nav__item[aria-current="true"] { box-shadow: none; border-color: var(--write); }
   .kv-chapter { padding: 22px 16px 0; }
-  .kv-topbar { padding: 9px 16px; }
+  /* Рельс здесь тоже прилипший и лежит выше (z-index 40) — прилипшая
+     шапка ушла бы целиком под него вместе с крошкой. Отпускаем её. */
+  .kv-topbar { position: static; padding: 9px 16px; }
   .kv-pager { padding: 0 16px; flex-direction: column; }
   .kv-pager button:last-child { text-align: left; }
   .kv-part { grid-template-columns: 1fr; gap: 2px; }

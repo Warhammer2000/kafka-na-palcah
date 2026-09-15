@@ -111,7 +111,10 @@ function outro(ctx) {
   outro(ctx);
 
   // Один таймер на весь документ: каждый стенд кладёт в TICKERS свою функцию.
-  script += '\napp.setInterval("kvTick()", 700);\n';
+  // Запуск только через kvStart: он держит возврат app.setInterval в переменной.
+  // Брошенный возврат Acrobat считает мусором и собирает вместе с таймером —
+  // стенды молча встают, а в Chrome/Edge этого не воспроизвести.
+  script += '\nkvStart(700);\n';
 
   L.attachScript(ctx, "kafka", script);
 
