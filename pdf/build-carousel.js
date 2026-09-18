@@ -22,6 +22,23 @@ const { C, KEYS, T } = L;
 const OUT = process.argv[2] || "../dist/kafka-linkedin.pdf";
 const SITE = "warhammer2000.github.io/kafka-na-palcah";
 
+/* Адрес самого документа — того, ради чего карусель и затевалась. В ленте она
+   превращается в картинки, поэтому адрес читатель перенабирает руками: значит он
+   обязан быть читаемым, а не случайным идентификатором с файлопомойки. Оба
+   документа лежат на Pages рядом с сайтом, поэтому домен здесь тот же, что в
+   SITE, — и берётся из него, чтобы не разъехался при переезде.
+   В одну строку адрес всё равно не влезает, поэтому разбит на две моноширинные,
+   а поверх карточки лежит аннотация-ссылка: в ленте она бесполезна, но карусель
+   ещё и скачивают — там по ней кликают.
+   Язык у каждой сборки свой: русскую карусель незачем уводить в английский
+   документ. T() на уровне модуля здесь безопасен — langFromArgv отработал выше.
+   Ссылка ВЫВОДИТСЯ из нарисованных строк, а не пишется рядом второй константой:
+   иначе карточка однажды напечатает один адрес, а аннотация уведёт на другой, и
+   в ленте, где кликать нечего, читатель уйдёт в никуда. Так расходиться нечему. */
+const DOC_TEXT = [SITE + "/", T("documents/kafka-na-palcah-ru.pdf",
+                                "documents/kafka-hands-on-en.pdf")];
+const DOC_URL = "https://" + DOC_TEXT.join("");
+
 const W = 1080, H = 1350;
 const M = 64;                 // поле от края листа
 const PAD = 52;               // поле внутри карточки
@@ -497,22 +514,30 @@ async function main() {
     const x0 = M + PAD;
     let y = s.top - 40;
 
+    /* В карточке — сам документ, а не сайт: карусель существует, чтобы до него
+       довести, и адрес сайта на её месте уводил читателя мимо. Сайт остаётся
+       ниже и мельче — как то же самое, но в браузере. */
+    const BOX_W = W - M * 2 - PAD * 2, BOX_H = 150;
     s.page.drawRectangle({
-      x: x0, y: y - 120, width: W - M * 2 - PAD * 2, height: 120,
+      x: x0, y: y - BOX_H, width: BOX_W, height: BOX_H,
       color: C.surface2, borderColor: C.write, borderWidth: 3,
     });
-    s.page.drawText(T("Пятнадцать интерактивных глав:", "Fifteen interactive chapters:"), { x: x0 + 32, y: y - 48, size: 24, font: F.sans, color: C.muted });
-    s.page.drawText(SITE, { x: x0 + 32, y: y - 94, size: 28, font: F.monoBold, color: C.write });
+    s.page.drawText(T("Интерактивный PDF со стендами:", "The interactive PDF with the demos:"), { x: x0 + 32, y: y - 44, size: 24, font: F.sans, color: C.muted });
+    s.page.drawText(DOC_TEXT[0], { x: x0 + 32, y: y - 84, size: 26, font: F.monoBold, color: C.write });
+    s.page.drawText(DOC_TEXT[1], { x: x0 + 32, y: y - 120, size: 26, font: F.monoBold, color: C.write });
+    /* Единственная аннотация во всей карусели. Кнопкой или полем формы она не
+       является, поэтому запрет на интерактив её не касается: поломаться в ленте
+       нечему — ссылка невидима и просто не сработает. */
+    L.link({ doc }, s.page, { x: x0, y: y - BOX_H, w: BOX_W, h: BOX_H }, DOC_URL);
 
-    y -= 170;
-    s.page.drawText(T("Работает в браузере, в том числе на телефоне.",
-      "Runs in a browser, phones included."), { x: x0, y, size: 24, font: F.sans, color: C.ink2 });
-    y -= 40;
-    s.page.drawText(T("Версию с живыми стендами внутри PDF ищи по ссылке в тексте поста —",
-      "The version with live demos inside the PDF is linked in the post text —"), { x: x0, y, size: 22, font: F.sans, color: C.faint });
+    y -= BOX_H + 50;
+    s.page.drawText(T("Скачай и открой на компьютере — в Chrome, Edge или Acrobat.",
+      "Download it and open it on a desktop, in Chrome, Edge or Acrobat."), { x: x0, y, size: 24, font: F.sans, color: C.ink2 });
+    y -= 46;
+    s.page.drawText(T("Те же пятнадцать глав в браузере, в том числе на телефоне:",
+      "The same fifteen chapters in a browser, phones included:"), { x: x0, y, size: 22, font: F.sans, color: C.faint });
     y -= 32;
-    s.page.drawText(T("её нужно скачать и открыть на компьютере, в Chrome, Edge или Acrobat.",
-      "download it and open it on a desktop, in Chrome, Edge or Acrobat."), { x: x0, y, size: 22, font: F.sans, color: C.faint });
+    s.page.drawText(SITE, { x: x0, y, size: 22, font: F.mono, color: C.muted });
 
     footnote(s.page, T("Здесь, в ленте, всё это статично: LinkedIn превращает любой документ в картинки. Так что кнопок тут нет — они ждут в файле.",
       "Here in the feed it is all static: LinkedIn turns any document into images. So there are no buttons here — they are waiting in the file."), C.read);
